@@ -1,0 +1,52 @@
+# Flutter / Dart
+frontend/.dart_tool/
+frontend/.flutter-plugins
+frontend/.flutter-plugins-dependencies
+frontend/.packages
+frontend/build/
+frontend/.idea/
+frontend/.metadata
+
+# Android
+frontend/android/.gradle/
+frontend/android/app/debug/
+frontend/android/app/profile/
+frontend/android/app/release/
+
+# iOS / macOS
+frontend/ios/Pods/
+frontend/ios/.symlinks/
+frontend/ios/Flutter/ephemeral/
+frontend/macos/Pods/
+frontend/macos/.symlinks/
+frontend/macos/Flutter/ephemeral/
+
+# Node.js
+backend/node_modules/
+backend/.npm/
+backend/logs/
+backend/*.log
+
+# Environment / secrets
+.env
+.env.*
+!.env.example
+
+backend/.env
+backend/.env.*
+!backend/.env.example
+
+# IDE
+.vscode/
+.idea/
+*.iml
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Build / temporary
+*.tmp
+*.temp
+*.log
