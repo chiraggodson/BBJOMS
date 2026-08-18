@@ -18,6 +18,7 @@ timeout /t 5 /nobreak >nul
 echo Starting Frontend...
 cd /d "%ROOT%frontend"
 
-flutter run -d windows
+flutter run -d web-server --web-hostname 0.0.0.0 --web-port 3000
+
 
 pause

@@ -1,122 +1,442 @@
 import 'package:flutter/material.dart';
 
+import 'dashboard_screen.dart';
+import 'parties_screen.dart';
+import 'yarn_screen.dart';
+import 'job_orders_screen.dart';
+import 'production_screen.dart';
+import 'machines_screen.dart';
+import 'fabric_screen.dart';
+import 'inventory_screen.dart';
+import 'reports_screen.dart';
+
 void main() {
-  runApp(const MyApp());
+  runApp(const BBJOMSApp());
 }
 
-class MyApp extends StatelessWidget {
-  const MyApp({super.key});
+class BBJOMSApp extends StatelessWidget {
+  const BBJOMSApp({super.key});
 
-  // This widget is the root of your application.
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Flutter Demo',
+      title: 'BBJOMS',
+      debugShowCheckedModeBanner: false,
       theme: ThemeData(
-        // This is the theme of your application.
-        //
-        // TRY THIS: Try running your application with "flutter run". You'll see
-        // the application has a purple toolbar. Then, without quitting the app,
-        // try changing the seedColor in the colorScheme below to Colors.green
-        // and then invoke "hot reload" (save your changes or press the "hot
-        // reload" button in a Flutter-supported IDE, or press "r" if you used
-        // the command line to start the app).
-        //
-        // Notice that the counter didn't reset back to zero; the application
-        // state is not lost during the reload. To reset the state, use hot
-        // restart instead.
-        //
-        // This works for code too, not just values: Most code changes can be
-        // tested with just a hot reload.
-        colorScheme: .fromSeed(seedColor: Colors.deepPurple),
+        brightness: Brightness.dark,
+        scaffoldBackgroundColor: const Color(0xFF0B1117),
+        colorScheme: ColorScheme.fromSeed(
+          seedColor: const Color(0xFF00BFA6),
+          brightness: Brightness.dark,
+        ),
+        useMaterial3: true,
+        fontFamily: 'Arial',
       ),
-      home: const MyHomePage(title: 'Flutter Demo Home Page'),
+      home: const BBJOMSShell(),
     );
   }
 }
 
-class MyHomePage extends StatefulWidget {
-  const MyHomePage({super.key, required this.title});
-
-  // This widget is the home page of your application. It is stateful, meaning
-  // that it has a State object (defined below) that contains fields that affect
-  // how it looks.
-
-  // This class is the configuration for the state. It holds the values (in this
-  // case the title) provided by the parent (in this case the App widget) and
-  // used by the build method of the State. Fields in a Widget subclass are
-  // always marked "final".
-
-  final String title;
+class BBJOMSShell extends StatefulWidget {
+  const BBJOMSShell({super.key});
 
   @override
-  State<MyHomePage> createState() => _MyHomePageState();
+  State<BBJOMSShell> createState() => _BBJOMSShellState();
 }
 
-class _MyHomePageState extends State<MyHomePage> {
-  int _counter = 0;
+class _BBJOMSShellState extends State<BBJOMSShell> {
+  int _selectedIndex = 0;
 
-  void _incrementCounter() {
-    setState(() {
-      // This call to setState tells the Flutter framework that something has
-      // changed in this State, which causes it to rerun the build method below
-      // so that the display can reflect the updated values. If we changed
-      // _counter without calling setState(), then the build method would not be
-      // called again, and so nothing would appear to happen.
-      _counter++;
-    });
-  }
+  final List<_NavigationItem> _navigationItems = const [
+    _NavigationItem(
+      icon: Icons.dashboard_outlined,
+      selectedIcon: Icons.dashboard,
+      label: 'Dashboard',
+    ),
+    _NavigationItem(
+      icon: Icons.people_outline,
+      selectedIcon: Icons.people,
+      label: 'Parties',
+    ),
+    _NavigationItem(
+      icon: Icons.inventory_2_outlined,
+      selectedIcon: Icons.inventory_2,
+      label: 'Yarn',
+    ),
+    _NavigationItem(
+      icon: Icons.assignment_outlined,
+      selectedIcon: Icons.assignment,
+      label: 'Job Orders',
+    ),
+    _NavigationItem(
+      icon: Icons.precision_manufacturing_outlined,
+      selectedIcon: Icons.precision_manufacturing,
+      label: 'Production',
+    ),
+    _NavigationItem(
+      icon: Icons.settings_outlined,
+      selectedIcon: Icons.settings,
+      label: 'Machines',
+    ),
+    _NavigationItem(
+      icon: Icons.layers_outlined,
+      selectedIcon: Icons.layers,
+      label: 'Fabric',
+    ),
+    _NavigationItem(
+      icon: Icons.warehouse_outlined,
+      selectedIcon: Icons.warehouse,
+      label: 'Inventory',
+    ),
+    _NavigationItem(
+      icon: Icons.bar_chart_outlined,
+      selectedIcon: Icons.bar_chart,
+      label: 'Reports',
+    ),
+  ];
 
   @override
   Widget build(BuildContext context) {
-    // This method is rerun every time setState is called, for instance as done
-    // by the _incrementCounter method above.
-    //
-    // The Flutter framework has been optimized to make rerunning build methods
-    // fast, so that you can just rebuild anything that needs updating rather
-    // than having to individually change instances of widgets.
+    final bool compact = MediaQuery.of(context).size.width < 1000;
+
     return Scaffold(
-      appBar: AppBar(
-        // TRY THIS: Try changing the color here to a specific color (to
-        // Colors.amber, perhaps?) and trigger a hot reload to see the AppBar
-        // change color while the other colors stay the same.
-        backgroundColor: Theme.of(context).colorScheme.inversePrimary,
-        // Here we take the value from the MyHomePage object that was created by
-        // the App.build method, and use it to set our appbar title.
-        title: Text(widget.title),
-      ),
-      body: Center(
-        // Center is a layout widget. It takes a single child and positions it
-        // in the middle of the parent.
-        child: Column(
-          // Column is also a layout widget. It takes a list of children and
-          // arranges them vertically. By default, it sizes itself to fit its
-          // children horizontally, and tries to be as tall as its parent.
-          //
-          // Column has various properties to control how it sizes itself and
-          // how it positions its children. Here we use mainAxisAlignment to
-          // center the children vertically; the main axis here is the vertical
-          // axis because Columns are vertical (the cross axis would be
-          // horizontal).
-          //
-          // TRY THIS: Invoke "debug painting" (choose the "Toggle Debug Paint"
-          // action in the IDE, or press "p" in the console), to see the
-          // wireframe for each widget.
-          mainAxisAlignment: .center,
-          children: [
-            const Text('You have pushed the button this many times:'),
-            Text(
-              '$_counter',
-              style: Theme.of(context).textTheme.headlineMedium,
+      body: Row(
+        children: [
+          _buildSidebar(compact),
+          Expanded(
+            child: Column(
+              children: [
+                _buildTopBar(),
+                Expanded(
+                  child: _buildPage(),
+                ),
+              ],
             ),
-          ],
-        ),
-      ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: _incrementCounter,
-        tooltip: 'Increment',
-        child: const Icon(Icons.add),
+          ),
+        ],
       ),
     );
   }
+
+  Widget _buildSidebar(bool compact) {
+    return Container(
+      width: compact ? 76 : 235,
+      decoration: const BoxDecoration(
+        color: Color(0xFF101820),
+        border: Border(
+          right: BorderSide(
+            color: Color(0xFF1D2933),
+          ),
+        ),
+      ),
+      child: Column(
+        children: [
+          const SizedBox(height: 22),
+          Padding(
+            padding: EdgeInsets.symmetric(
+              horizontal: compact ? 12 : 20,
+            ),
+            child: Row(
+              mainAxisAlignment: compact
+                  ? MainAxisAlignment.center
+                  : MainAxisAlignment.start,
+              children: [
+                Container(
+                  width: 38,
+                  height: 38,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF00BFA6),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: const Icon(
+                    Icons.factory,
+                    color: Colors.white,
+                    size: 22,
+                  ),
+                ),
+                if (!compact) ...[
+                  const SizedBox(width: 12),
+                  const Text(
+                    'BBJOMS',
+                    style: TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: 0.5,
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+          const SizedBox(height: 32),
+          Expanded(
+            child: ListView.builder(
+              padding: const EdgeInsets.symmetric(horizontal: 10),
+              itemCount: _navigationItems.length,
+              itemBuilder: (context, index) {
+                final item = _navigationItems[index];
+                final selected = index == _selectedIndex;
+
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 4),
+                  child: _SidebarItem(
+                    item: item,
+                    selected: selected,
+                    compact: compact,
+                    onTap: () {
+                      setState(() {
+                        _selectedIndex = index;
+                      });
+                    },
+                  ),
+                );
+              },
+            ),
+          ),
+          Container(
+            margin: const EdgeInsets.all(12),
+            padding: EdgeInsets.all(compact ? 8 : 12),
+            decoration: BoxDecoration(
+              color: const Color(0xFF151F28),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Row(
+              mainAxisAlignment: compact
+                  ? MainAxisAlignment.center
+                  : MainAxisAlignment.start,
+              children: [
+                CircleAvatar(
+                  radius: 17,
+                  backgroundColor: const Color(0xFF00BFA6),
+                  child: const Text(
+                    'C',
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+                if (!compact) ...[
+                  const SizedBox(width: 10),
+                  const Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Admin',
+                          style: TextStyle(
+                            fontWeight: FontWeight.w600,
+                            fontSize: 13,
+                          ),
+                        ),
+                        SizedBox(height: 2),
+                        Text(
+                          'Administrator',
+                          style: TextStyle(
+                            color: Color(0xFF84919D),
+                            fontSize: 11,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const Icon(
+                    Icons.more_vert,
+                    size: 18,
+                    color: Color(0xFF84919D),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTopBar() {
+    return Container(
+      height: 68,
+      padding: const EdgeInsets.symmetric(horizontal: 28),
+      decoration: const BoxDecoration(
+        color: Color(0xFF0F171E),
+        border: Border(
+          bottom: BorderSide(
+            color: Color(0xFF1D2933),
+          ),
+        ),
+      ),
+      child: Row(
+        children: [
+          Text(
+            _navigationItems[_selectedIndex].label,
+            style: const TextStyle(
+              fontSize: 21,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const Spacer(),
+          Container(
+            width: 220,
+            height: 38,
+            decoration: BoxDecoration(
+              color: const Color(0xFF151F28),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(
+                color: const Color(0xFF25313B),
+              ),
+            ),
+            child: const Row(
+              children: [
+                SizedBox(width: 12),
+                Icon(
+                  Icons.search,
+                  size: 18,
+                  color: Color(0xFF71808D),
+                ),
+                SizedBox(width: 8),
+                Text(
+                  'Search...',
+                  style: TextStyle(
+                    color: Color(0xFF71808D),
+                    fontSize: 13,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 16),
+          IconButton(
+            onPressed: () {},
+            icon: const Icon(Icons.notifications_none),
+            tooltip: 'Notifications',
+          ),
+          const SizedBox(width: 8),
+          Container(
+            width: 1,
+            height: 28,
+            color: const Color(0xFF25313B),
+          ),
+          const SizedBox(width: 16),
+          const Text(
+            'B&B KnitFab',
+            style: TextStyle(
+              color: Color(0xFF9BA7B2),
+              fontSize: 13,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPage() {
+    switch (_selectedIndex) {
+      case 0:
+        return const DashboardPage();
+
+      case 1:
+        return const PartiesPage();
+
+      case 2:
+        return const YarnPage();
+
+      case 3:
+        return const JobOrdersPage();
+
+      case 4:
+        return const ProductionPage();
+
+      case 5:
+        return const MachinesPage();
+
+      case 6:
+        return const FabricPage();
+
+      case 7:
+        return const InventoryPage();
+
+      case 8:
+        return const ReportsPage();
+
+      default:
+        return const DashboardPage();
+    }
+  }
+}
+
+class _SidebarItem extends StatelessWidget {
+  final _NavigationItem item;
+  final bool selected;
+  final bool compact;
+  final VoidCallback onTap;
+
+  const _SidebarItem({
+    required this.item,
+    required this.selected,
+    required this.compact,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Tooltip(
+      message: compact ? item.label : '',
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(8),
+        child: Container(
+          height: 44,
+          padding: EdgeInsets.symmetric(
+            horizontal: compact ? 0 : 12,
+          ),
+          decoration: BoxDecoration(
+            color: selected
+                ? const Color(0xFF00BFA6).withValues(alpha: 0.12)
+                : Colors.transparent,
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Row(
+            mainAxisAlignment: compact
+                ? MainAxisAlignment.center
+                : MainAxisAlignment.start,
+            children: [
+              Icon(
+                selected ? item.selectedIcon : item.icon,
+                size: 20,
+                color: selected
+                    ? const Color(0xFF00BFA6)
+                    : const Color(0xFF7C8995),
+              ),
+              if (!compact) ...[
+                const SizedBox(width: 12),
+                Text(
+                  item.label,
+                  style: TextStyle(
+                    color: selected
+                        ? const Color(0xFFE8F2F0)
+                        : const Color(0xFF9BA7B2),
+                    fontSize: 13,
+                    fontWeight:
+                        selected ? FontWeight.w600 : FontWeight.w400,
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _NavigationItem {
+  final IconData icon;
+  final IconData selectedIcon;
+  final String label;
+
+  const _NavigationItem({
+    required this.icon,
+    required this.selectedIcon,
+    required this.label,
+  });
 }
