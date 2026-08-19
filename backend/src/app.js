@@ -3,6 +3,8 @@ const cors = require('cors');
 
 const app = express();
 
+const partyRoutes = require('./routes/party.routes');
+
 app.use(cors());
 app.use(express.json());
 
@@ -35,5 +37,7 @@ app.get('/api/health/database', async (req, res) => {
     });
   }
 });
+
+app.use('/api/parties', partyRoutes);
 
 module.exports = app;

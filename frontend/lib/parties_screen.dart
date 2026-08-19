@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import 'services/api_service.dart';
+
 class PartiesPage extends StatefulWidget {
   const PartiesPage({super.key});
 
@@ -8,118 +10,22 @@ class PartiesPage extends StatefulWidget {
 }
 
 class _PartiesPageState extends State<PartiesPage> {
+  final ApiService _apiService = ApiService();
   final TextEditingController _searchController = TextEditingController();
 
-  final List<_Party> _parties = [
-    _Party(
-      name: 'B&B KNIT FAB',
-      roles: ['Customer', 'Job Worker'],
-      city: 'Ludhiana',
-      state: 'Punjab',
-      gstin: '',
-      phone: '',
-      contact: '',
-    ),
-    _Party(
-      name: 'A.D CLOTHING',
-      roles: ['Customer'],
-      city: 'Ludhiana',
-      state: 'Punjab',
-      gstin: '03ABKFA8325H...',
-      phone: '',
-      contact: '',
-    ),
-    _Party(
-      name: 'A.K.GOYAL HOSIERY',
-      roles: ['Customer'],
-      city: 'Ludhiana',
-      state: 'Punjab',
-      gstin: '03ABKPG4650H...',
-      phone: '',
-      contact: '',
-    ),
-    _Party(
-      name: 'AARADHYA CREATIONS',
-      roles: ['Customer'],
-      city: 'Ludhiana',
-      state: 'Punjab',
-      gstin: '03AQRPA0412D...',
-      phone: '',
-      contact: '',
-    ),
-    _Party(
-      name: 'ADAM KNITS',
-      roles: ['Customer'],
-      city: 'Ludhiana',
-      state: 'Punjab',
-      gstin: '03AKFPJ4824Q...',
-      phone: '',
-      contact: '',
-    ),
-    _Party(
-      name: 'AMIT ENTERPRISES',
-      roles: ['Customer'],
-      city: 'Ludhiana',
-      state: 'Punjab',
-      gstin: '03AAJFA2975L...',
-      phone: '',
-      contact: '',
-    ),
-    _Party(
-      name: 'ANKUSH KNITS',
-      roles: ['Customer'],
-      city: 'Ludhiana',
-      state: 'Punjab',
-      gstin: '03AAVCA0500F...',
-      phone: '',
-      contact: '',
-    ),
-    _Party(
-      name: 'ANSH FABRICS',
-      roles: ['Customer'],
-      city: 'Ludhiana',
-      state: 'Punjab',
-      gstin: '03ADHPA8268...',
-      phone: '',
-      contact: '',
-    ),
-    _Party(
-      name: 'BANI FABRICS',
-      roles: ['Customer'],
-      city: 'Ludhiana',
-      state: 'Punjab',
-      gstin: '03ABLPT5283C...',
-      phone: '',
-      contact: '',
-    ),
-    _Party(
-      name: 'BHARTI FABRICS',
-      roles: ['Customer'],
-      city: 'Ludhiana',
-      state: 'Punjab',
-      gstin: '03ABNPJ3788Q...',
-      phone: '',
-      contact: '',
-    ),
-    _Party(
-      name: 'B.D.S CLOTHING',
-      roles: ['Customer'],
-      city: 'Ludhiana',
-      state: 'Punjab',
-      gstin: '03AAJFB5116N...',
-      phone: '',
-      contact: '',
-    ),
-    _Party(
-      name: 'CHARLEY KNITS',
-      roles: ['Customer'],
-      city: 'Ludhiana',
-      state: 'Punjab',
-      gstin: '03AABCC2212...',
-      phone: '9814085399',
-      contact: '',
-    ),
-  ];
+  List<Party> _parties = [];
+  PartyStats? _stats;
+
+  bool _loading = true;
+  bool _loadingStats = true;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadParties();
+    _loadStats();
+  }
 
   @override
   void dispose() {
@@ -127,21 +33,97 @@ class _PartiesPageState extends State<PartiesPage> {
     super.dispose();
   }
 
-  List<_Party> get _filteredParties {
+  Future<void> _loadParties() async {
+    if (mounted) {
+      setState(() {
+        _loading = true;
+        _error = null;
+      });
+    }
+
+    try {
+      final parties = await _apiService.getParties(
+        active: true,
+      );
+
+      if (!mounted) return;
+
+      setState(() {
+        _parties = parties;
+        _loading = false;
+      });
+    } catch (error) {
+      if (!mounted) return;
+
+      setState(() {
+        _loading = false;
+        _error = error.toString();
+      });
+    }
+  }
+
+  Future<void> _loadStats() async {
+    try {
+      final stats = await _apiService.getPartyStats();
+
+      if (!mounted) return;
+
+      setState(() {
+        _stats = stats;
+        _loadingStats = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+
+      setState(() {
+        _loadingStats = false;
+      });
+    }
+  }
+
+  Future<void> _refresh() async {
+    await Future.wait([
+      _loadParties(),
+      _loadStats(),
+    ]);
+  }
+
+  List<Party> get _filteredParties {
     final query = _searchController.text.trim().toLowerCase();
-    if (query.isEmpty) return _parties;
+
+    if (query.isEmpty) {
+      return _parties;
+    }
 
     return _parties.where((party) {
       return party.name.toLowerCase().contains(query) ||
+          party.partyCode.toLowerCase().contains(query) ||
           party.city.toLowerCase().contains(query) ||
-          party.roles.any((role) => role.toLowerCase().contains(query));
+          party.gstin.toLowerCase().contains(query) ||
+          party.phone.toLowerCase().contains(query) ||
+          party.roles.any(
+            (role) => role.toLowerCase().contains(query),
+          );
     }).toList();
   }
 
-  void _openPartyForm() {
-    showDialog<void>(
+  Future<void> _openPartyForm() async {
+    final saved = await showDialog<bool>(
       context: context,
       builder: (_) => const _PartyFormDialog(),
+    );
+
+    if (saved == true) {
+      await _refresh();
+    }
+  }
+
+  void _showError(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: const Color(0xFF7A2525),
+      ),
     );
   }
 
@@ -179,6 +161,12 @@ class _PartiesPageState extends State<PartiesPage> {
                   ],
                 ),
               ),
+              IconButton(
+                onPressed: _refresh,
+                tooltip: 'Refresh',
+                icon: const Icon(Icons.refresh),
+              ),
+              const SizedBox(width: 8),
               FilledButton.icon(
                 onPressed: _openPartyForm,
                 icon: const Icon(Icons.add, size: 18),
@@ -195,7 +183,10 @@ class _PartiesPageState extends State<PartiesPage> {
             ],
           ),
           const SizedBox(height: 24),
-          _PartySummary(),
+          _PartySummary(
+            stats: _stats,
+            loading: _loadingStats,
+          ),
           const SizedBox(height: 20),
           _DashboardCard(
             title: 'Party Master',
@@ -207,7 +198,10 @@ class _PartiesPageState extends State<PartiesPage> {
                   onChanged: (_) => setState(() {}),
                   decoration: InputDecoration(
                     hintText: 'Search party, city or role...',
-                    prefixIcon: const Icon(Icons.search, size: 20),
+                    prefixIcon: const Icon(
+                      Icons.search,
+                      size: 20,
+                    ),
                     suffixIcon: _searchController.text.isEmpty
                         ? null
                         : IconButton(
@@ -215,7 +209,10 @@ class _PartiesPageState extends State<PartiesPage> {
                               _searchController.clear();
                               setState(() {});
                             },
-                            icon: const Icon(Icons.clear, size: 18),
+                            icon: const Icon(
+                              Icons.clear,
+                              size: 18,
+                            ),
                           ),
                     filled: true,
                     fillColor: const Color(0xFF0F171E),
@@ -240,7 +237,19 @@ class _PartiesPageState extends State<PartiesPage> {
                   ),
                 ),
                 const SizedBox(height: 18),
-                if (parties.isEmpty)
+                if (_loading)
+                  const Padding(
+                    padding: EdgeInsets.all(50),
+                    child: CircularProgressIndicator(
+                      color: Color(0xFF00BFA6),
+                    ),
+                  )
+                else if (_error != null)
+                  _ErrorState(
+                    message: _error!,
+                    onRetry: _refresh,
+                  )
+                else if (parties.isEmpty)
                   const Padding(
                     padding: EdgeInsets.all(40),
                     child: Column(
@@ -258,6 +267,14 @@ class _PartiesPageState extends State<PartiesPage> {
                             fontSize: 14,
                           ),
                         ),
+                        SizedBox(height: 6),
+                        Text(
+                          'Create your first party using New Party.',
+                          style: TextStyle(
+                            color: Color(0xFF53616D),
+                            fontSize: 12,
+                          ),
+                        ),
                       ],
                     ),
                   )
@@ -273,19 +290,41 @@ class _PartiesPageState extends State<PartiesPage> {
 }
 
 class _PartySummary extends StatelessWidget {
-  const _PartySummary();
+  final PartyStats? stats;
+  final bool loading;
+
+  const _PartySummary({
+    required this.stats,
+    required this.loading,
+  });
 
   @override
   Widget build(BuildContext context) {
+    final cards = [
+      (
+        'Total Parties',
+        loading ? '—' : '${stats?.totalParties ?? 0}',
+        Icons.people_outline,
+      ),
+      (
+        'Customers',
+        loading ? '—' : '${stats?.customers ?? 0}',
+        Icons.storefront_outlined,
+      ),
+      (
+        'Job Workers',
+        loading ? '—' : '${stats?.jobWorkers ?? 0}',
+        Icons.precision_manufacturing_outlined,
+      ),
+      (
+        'Yarn Suppliers',
+        loading ? '—' : '${stats?.yarnSuppliers ?? 0}',
+        Icons.local_shipping_outlined,
+      ),
+    ];
+
     return LayoutBuilder(
       builder: (context, constraints) {
-        final cards = const [
-          ('Total Parties', '136', Icons.people_outline),
-          ('Customers', '98', Icons.storefront_outlined),
-          ('Job Workers', '21', Icons.precision_manufacturing_outlined),
-          ('Suppliers', '17', Icons.local_shipping_outlined),
-        ];
-
         if (constraints.maxWidth < 760) {
           return Wrap(
             spacing: 12,
@@ -342,7 +381,9 @@ class _PartyStatCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: const Color(0xFF111A22),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFF1E2A34)),
+        border: Border.all(
+          color: const Color(0xFF1E2A34),
+        ),
       ),
       child: Row(
         children: [
@@ -350,7 +391,9 @@ class _PartyStatCard extends StatelessWidget {
             width: 42,
             height: 42,
             decoration: BoxDecoration(
-              color: const Color(0xFF00BFA6).withValues(alpha: 0.12),
+              color: const Color(0xFF00BFA6).withValues(
+                alpha: 0.12,
+              ),
               borderRadius: BorderRadius.circular(10),
             ),
             child: Icon(
@@ -387,9 +430,11 @@ class _PartyStatCard extends StatelessWidget {
 }
 
 class _PartyTable extends StatelessWidget {
-  final List<_Party> parties;
+  final List<Party> parties;
 
-  const _PartyTable({required this.parties});
+  const _PartyTable({
+    required this.parties,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -401,10 +446,14 @@ class _PartyTable extends StatelessWidget {
           return Column(
             children: parties.map((party) {
               return Container(
-                padding: const EdgeInsets.symmetric(vertical: 14),
+                padding: const EdgeInsets.symmetric(
+                  vertical: 14,
+                ),
                 decoration: const BoxDecoration(
                   border: Border(
-                    bottom: BorderSide(color: Color(0xFF1D2933)),
+                    bottom: BorderSide(
+                      color: Color(0xFF1D2933),
+                    ),
                   ),
                 ),
                 child: Row(
@@ -421,7 +470,8 @@ class _PartyTable extends StatelessWidget {
                     const SizedBox(width: 12),
                     Expanded(
                       child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
+                        crossAxisAlignment:
+                            CrossAxisAlignment.start,
                         children: [
                           Text(
                             party.name,
@@ -432,7 +482,9 @@ class _PartyTable extends StatelessWidget {
                           ),
                           const SizedBox(height: 4),
                           Text(
-                            '${party.city.isEmpty ? '—' : party.city} • ${party.roles.join(', ')}',
+                            '${party.partyCode} • '
+                            '${party.city.isEmpty ? '—' : party.city} • '
+                            '${party.roles.join(', ')}',
                             style: const TextStyle(
                               color: Color(0xFF71808D),
                               fontSize: 11,
@@ -505,7 +557,9 @@ class _PartyTable extends StatelessWidget {
                 ),
                 decoration: const BoxDecoration(
                   border: Border(
-                    bottom: BorderSide(color: Color(0xFF1D2933)),
+                    bottom: BorderSide(
+                      color: Color(0xFF1D2933),
+                    ),
                   ),
                 ),
                 child: Row(
@@ -525,13 +579,27 @@ class _PartyTable extends StatelessWidget {
                           ),
                           const SizedBox(width: 10),
                           Expanded(
-                            child: Text(
-                              party.name,
-                              overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(
-                                fontWeight: FontWeight.w600,
-                                fontSize: 12,
-                              ),
+                            child: Column(
+                              crossAxisAlignment:
+                                  CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  party.name,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.w600,
+                                    fontSize: 12,
+                                  ),
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  party.partyCode,
+                                  style: const TextStyle(
+                                    color: Color(0xFF53616D),
+                                    fontSize: 10,
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
                         ],
@@ -543,7 +611,11 @@ class _PartyTable extends StatelessWidget {
                         spacing: 5,
                         runSpacing: 4,
                         children: party.roles
-                            .map((role) => _RoleChip(role: role))
+                            .map(
+                              (role) => _RoleChip(
+                                role: role,
+                              ),
+                            )
                             .toList(),
                       ),
                     ),
@@ -560,7 +632,9 @@ class _PartyTable extends StatelessWidget {
                     Expanded(
                       flex: 3,
                       child: Text(
-                        party.gstin.isEmpty ? '—' : party.gstin,
+                        party.gstin.isEmpty
+                            ? '—'
+                            : party.gstin,
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
                           color: Color(0xFF71808D),
@@ -590,7 +664,9 @@ class _PartyTable extends StatelessWidget {
 class _RoleChip extends StatelessWidget {
   final String role;
 
-  const _RoleChip({required this.role});
+  const _RoleChip({
+    required this.role,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -600,7 +676,9 @@ class _RoleChip extends StatelessWidget {
         vertical: 4,
       ),
       decoration: BoxDecoration(
-        color: const Color(0xFF00BFA6).withValues(alpha: 0.10),
+        color: const Color(0xFF00BFA6).withValues(
+          alpha: 0.10,
+        ),
         borderRadius: BorderRadius.circular(20),
       ),
       child: Text(
@@ -623,26 +701,6 @@ class _TableHeaderStyle {
   );
 }
 
-class _Party {
-  final String name;
-  final List<String> roles;
-  final String city;
-  final String state;
-  final String gstin;
-  final String phone;
-  final String contact;
-
-  const _Party({
-    required this.name,
-    required this.roles,
-    required this.city,
-    required this.state,
-    required this.gstin,
-    required this.phone,
-    required this.contact,
-  });
-}
-
 class _PartyFormDialog extends StatefulWidget {
   const _PartyFormDialog();
 
@@ -652,10 +710,12 @@ class _PartyFormDialog extends StatefulWidget {
 
 class _PartyFormDialogState extends State<_PartyFormDialog> {
   final _formKey = GlobalKey<FormState>();
+  final ApiService _apiService = ApiService();
 
   final _nameController = TextEditingController();
   final _aliasController = TextEditingController();
   final _gstinController = TextEditingController();
+  final _panController = TextEditingController();
   final _address1Controller = TextEditingController();
   final _address2Controller = TextEditingController();
   final _cityController = TextEditingController();
@@ -664,38 +724,43 @@ class _PartyFormDialogState extends State<_PartyFormDialog> {
   final _contactController = TextEditingController();
   final _phoneController = TextEditingController();
   final _emailController = TextEditingController();
+  final _notesController = TextEditingController();
 
   final Set<String> _roles = {'Customer'};
+
+  bool _saving = false;
 
   static const _availableRoles = [
     'Customer',
     'Yarn Supplier',
     'Job Worker',
     'Processor',
+    'Fabric Buyer',
     'Other',
   ];
 
   @override
   void dispose() {
-    for (final controller in [
-      _nameController,
-      _aliasController,
-      _gstinController,
-      _address1Controller,
-      _address2Controller,
-      _cityController,
-      _stateController,
-      _pinController,
-      _contactController,
-      _phoneController,
-      _emailController,
-    ]) {
-      controller.dispose();
-    }
+    _nameController.dispose();
+    _aliasController.dispose();
+    _gstinController.dispose();
+    _panController.dispose();
+    _address1Controller.dispose();
+    _address2Controller.dispose();
+    _cityController.dispose();
+    _stateController.dispose();
+    _pinController.dispose();
+    _contactController.dispose();
+    _phoneController.dispose();
+    _emailController.dispose();
+    _notesController.dispose();
     super.dispose();
   }
 
-  InputDecoration _decoration(String label, {String? hint}) {
+  InputDecoration _decoration(
+    String label, {
+    String? hint,
+  }) {
     return InputDecoration(
       labelText: label,
       hintText: hint,
@@ -703,17 +768,98 @@ class _PartyFormDialogState extends State<_PartyFormDialog> {
       fillColor: const Color(0xFF0F171E),
       border: OutlineInputBorder(
         borderRadius: BorderRadius.circular(8),
-        borderSide: const BorderSide(color: Color(0xFF25313B)),
+        borderSide: const BorderSide(
+          color: Color(0xFF25313B),
+        ),
       ),
       enabledBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(8),
-        borderSide: const BorderSide(color: Color(0xFF25313B)),
+        borderSide: const BorderSide(
+          color: Color(0xFF25313B),
+        ),
       ),
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(8),
-        borderSide: const BorderSide(color: Color(0xFF00BFA6)),
+        borderSide: const BorderSide(
+          color: Color(0xFF00BFA6),
+        ),
       ),
     );
+  }
+
+  String? _clean(String value) {
+    final cleaned = value.trim();
+    return cleaned.isEmpty ? null : cleaned;
+  }
+
+  Future<void> _saveParty() async {
+    if (!_formKey.currentState!.validate()) {
+      return;
+    }
+
+    if (_roles.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Select at least one party role.',
+          ),
+        ),
+      );
+      return;
+    }
+
+    setState(() {
+      _saving = true;
+    });
+
+    try {
+      await _apiService.createParty(
+        name: _nameController.text.trim(),
+        alias: _clean(_aliasController.text),
+        gstin: _clean(_gstinController.text),
+        pan: _clean(_panController.text),
+        addressLine1: _clean(_address1Controller.text),
+        addressLine2: _clean(_address2Controller.text),
+        city: _clean(_cityController.text),
+        state: _clean(_stateController.text),
+        pinCode: _clean(_pinController.text),
+        country: 'India',
+        contactPerson: _clean(_contactController.text),
+        phone: _clean(_phoneController.text),
+        email: _clean(_emailController.text),
+        roles: _roles.toList(),
+        isActive: true,
+        notes: _clean(_notesController.text),
+      );
+
+      if (!mounted) return;
+
+      Navigator.pop(context, true);
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Party saved successfully.',
+          ),
+          backgroundColor: Color(0xFF087F6B),
+        ),
+      );
+    } catch (error) {
+      if (!mounted) return;
+
+      setState(() {
+        _saving = false;
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Could not save party: $error',
+          ),
+          backgroundColor: const Color(0xFF7A2525),
+        ),
+      );
+    }
   }
 
   @override
@@ -724,17 +870,23 @@ class _PartyFormDialogState extends State<_PartyFormDialog> {
       child: ConstrainedBox(
         constraints: const BoxConstraints(
           maxWidth: 900,
-          maxHeight: 760,
+          maxHeight: 780,
         ),
         child: Column(
           children: [
             Padding(
-              padding: const EdgeInsets.fromLTRB(24, 20, 16, 18),
+              padding: const EdgeInsets.fromLTRB(
+                24,
+                20,
+                16,
+                18,
+              ),
               child: Row(
                 children: [
                   const Expanded(
                     child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+                      crossAxisAlignment:
+                          CrossAxisAlignment.start,
                       children: [
                         Text(
                           'New Party',
@@ -755,20 +907,25 @@ class _PartyFormDialogState extends State<_PartyFormDialog> {
                     ),
                   ),
                   IconButton(
-                    onPressed: () => Navigator.pop(context),
+                    onPressed:
+                        _saving ? null : () => Navigator.pop(context),
                     icon: const Icon(Icons.close),
                   ),
                 ],
               ),
             ),
-            const Divider(height: 1, color: Color(0xFF25313B)),
+            const Divider(
+              height: 1,
+              color: Color(0xFF25313B),
+            ),
             Expanded(
               child: Form(
                 key: _formKey,
                 child: SingleChildScrollView(
                   padding: const EdgeInsets.all(24),
                   child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+                    crossAxisAlignment:
+                        CrossAxisAlignment.start,
                     children: [
                       const _FormSectionTitle(
                         title: 'Basic Information',
@@ -777,9 +934,11 @@ class _PartyFormDialogState extends State<_PartyFormDialog> {
                       const SizedBox(height: 14),
                       TextFormField(
                         controller: _nameController,
-                        decoration: _decoration('Party Name *'),
+                        decoration:
+                            _decoration('Party Name *'),
                         validator: (value) {
-                          if (value == null || value.trim().isEmpty) {
+                          if (value == null ||
+                              value.trim().isEmpty) {
                             return 'Party name is required';
                           }
                           return null;
@@ -788,7 +947,8 @@ class _PartyFormDialogState extends State<_PartyFormDialog> {
                       const SizedBox(height: 14),
                       TextFormField(
                         controller: _aliasController,
-                        decoration: _decoration('Print Alias'),
+                        decoration:
+                            _decoration('Print Alias'),
                       ),
                       const SizedBox(height: 18),
                       const Text(
@@ -804,22 +964,28 @@ class _PartyFormDialogState extends State<_PartyFormDialog> {
                         spacing: 8,
                         runSpacing: 8,
                         children: _availableRoles.map((role) {
-                          final selected = _roles.contains(role);
+                          final selected =
+                              _roles.contains(role);
+
                           return FilterChip(
                             label: Text(role),
                             selected: selected,
-                            onSelected: (value) {
-                              setState(() {
-                                if (value) {
-                                  _roles.add(role);
-                                } else {
-                                  _roles.remove(role);
-                                }
-                              });
-                            },
+                            onSelected: _saving
+                                ? null
+                                : (value) {
+                                    setState(() {
+                                      if (value) {
+                                        _roles.add(role);
+                                      } else {
+                                        _roles.remove(role);
+                                      }
+                                    });
+                                  },
                             selectedColor:
-                                const Color(0xFF00BFA6).withValues(alpha: 0.18),
-                            checkmarkColor: const Color(0xFF00BFA6),
+                                const Color(0xFF00BFA6)
+                                    .withValues(alpha: 0.18),
+                            checkmarkColor:
+                                const Color(0xFF00BFA6),
                             side: const BorderSide(
                               color: Color(0xFF25313B),
                             ),
@@ -832,19 +998,11 @@ class _PartyFormDialogState extends State<_PartyFormDialog> {
                         icon: Icons.receipt_long_outlined,
                       ),
                       const SizedBox(height: 14),
-                      TextFormField(
-                        controller: _gstinController,
-                        decoration: _decoration('GSTIN'),
-                      ),
-                      const SizedBox(height: 24),
-                      const _FormSectionTitle(
-                        title: 'Address',
-                        icon: Icons.location_on_outlined,
-                      ),
-                      const SizedBox(height: 14),
                       LayoutBuilder(
                         builder: (context, constraints) {
-                          final twoColumns = constraints.maxWidth > 650;
+                          final twoColumns =
+                              constraints.maxWidth > 650;
+
                           final width = twoColumns
                               ? (constraints.maxWidth - 14) / 2
                               : constraints.maxWidth;
@@ -856,43 +1014,98 @@ class _PartyFormDialogState extends State<_PartyFormDialog> {
                               SizedBox(
                                 width: width,
                                 child: TextFormField(
-                                  controller: _address1Controller,
-                                  decoration: _decoration('Address Line 1'),
+                                  controller:
+                                      _gstinController,
+                                  decoration:
+                                      _decoration('GSTIN'),
                                 ),
                               ),
                               SizedBox(
                                 width: width,
                                 child: TextFormField(
-                                  controller: _address2Controller,
-                                  decoration: _decoration('Address Line 2'),
+                                  controller:
+                                      _panController,
+                                  decoration:
+                                      _decoration('PAN'),
+                                ),
+                              ),
+                            ],
+                          );
+                        },
+                      ),
+                      const SizedBox(height: 24),
+                      const _FormSectionTitle(
+                        title: 'Address',
+                        icon: Icons.location_on_outlined,
+                      ),
+                      const SizedBox(height: 14),
+                      LayoutBuilder(
+                        builder: (context, constraints) {
+                          final twoColumns =
+                              constraints.maxWidth > 650;
+
+                          final width = twoColumns
+                              ? (constraints.maxWidth - 14) / 2
+                              : constraints.maxWidth;
+
+                          return Wrap(
+                            spacing: 14,
+                            runSpacing: 14,
+                            children: [
+                              SizedBox(
+                                width: width,
+                                child: TextFormField(
+                                  controller:
+                                      _address1Controller,
+                                  decoration: _decoration(
+                                    'Address Line 1',
+                                  ),
                                 ),
                               ),
                               SizedBox(
                                 width: width,
                                 child: TextFormField(
-                                  controller: _cityController,
-                                  decoration: _decoration('City'),
+                                  controller:
+                                      _address2Controller,
+                                  decoration: _decoration(
+                                    'Address Line 2',
+                                  ),
                                 ),
                               ),
                               SizedBox(
                                 width: width,
                                 child: TextFormField(
-                                  controller: _stateController,
-                                  decoration: _decoration('State'),
+                                  controller:
+                                      _cityController,
+                                  decoration:
+                                      _decoration('City'),
                                 ),
                               ),
                               SizedBox(
                                 width: width,
                                 child: TextFormField(
-                                  controller: _pinController,
-                                  decoration: _decoration('PIN Code'),
+                                  controller:
+                                      _stateController,
+                                  decoration:
+                                      _decoration('State'),
+                                ),
+                              ),
+                              SizedBox(
+                                width: width,
+                                child: TextFormField(
+                                  controller:
+                                      _pinController,
+                                  decoration:
+                                      _decoration('PIN Code'),
                                 ),
                               ),
                               SizedBox(
                                 width: width,
                                 child: TextFormField(
                                   initialValue: 'India',
-                                  decoration: _decoration('Country'),
+                                  decoration:
+                                      _decoration('Country'),
+                                  enabled: false,
                                 ),
                               ),
                             ],
@@ -907,7 +1120,9 @@ class _PartyFormDialogState extends State<_PartyFormDialog> {
                       const SizedBox(height: 14),
                       LayoutBuilder(
                         builder: (context, constraints) {
-                          final twoColumns = constraints.maxWidth > 650;
+                          final twoColumns =
+                              constraints.maxWidth > 650;
+
                           final width = twoColumns
                               ? (constraints.maxWidth - 14) / 2
                               : constraints.maxWidth;
@@ -919,23 +1134,42 @@ class _PartyFormDialogState extends State<_PartyFormDialog> {
                               SizedBox(
                                 width: width,
                                 child: TextFormField(
-                                  controller: _contactController,
-                                  decoration: _decoration('Contact Person'),
+                                  controller:
+                                      _contactController,
+                                  decoration: _decoration(
+                                    'Contact Person',
+                                  ),
                                 ),
                               ),
                               SizedBox(
                                 width: width,
                                 child: TextFormField(
-                                  controller: _phoneController,
-                                  decoration: _decoration('Contact Number'),
+                                  controller:
+                                      _phoneController,
+                                  decoration: _decoration(
+                                    'Contact Number',
+                                  ),
                                 ),
                               ),
                               SizedBox(
                                 width: width,
                                 child: TextFormField(
-                                  controller: _emailController,
-                                  decoration: _decoration('Email'),
-                                  keyboardType: TextInputType.emailAddress,
+                                  controller:
+                                      _emailController,
+                                  decoration:
+                                      _decoration('Email'),
+                                  keyboardType:
+                                      TextInputType.emailAddress,
+                                ),
+                              ),
+                              SizedBox(
+                                width: width,
+                                child: TextFormField(
+                                  controller:
+                                      _notesController,
+                                  decoration:
+                                      _decoration('Notes'),
+                                  maxLines: 3,
                                 ),
                               ),
                             ],
@@ -947,38 +1181,47 @@ class _PartyFormDialogState extends State<_PartyFormDialog> {
                 ),
               ),
             ),
-            const Divider(height: 1, color: Color(0xFF25313B)),
+            const Divider(
+              height: 1,
+              color: Color(0xFF25313B),
+            ),
             Padding(
               padding: const EdgeInsets.all(16),
               child: Row(
-                mainAxisAlignment: MainAxisAlignment.end,
+                mainAxisAlignment:
+                    MainAxisAlignment.end,
                 children: [
                   TextButton(
-                    onPressed: () => Navigator.pop(context),
+                    onPressed: _saving
+                        ? null
+                        : () => Navigator.pop(context),
                     child: const Text('Cancel'),
                   ),
                   const SizedBox(width: 10),
                   FilledButton(
-                    onPressed: () {
-                      if (!_formKey.currentState!.validate()) return;
-                      Navigator.pop(context);
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text(
-                            'Party saved locally. Database linking comes next.',
-                          ),
-                        ),
-                      );
-                    },
+                    onPressed:
+                        _saving ? null : _saveParty,
                     style: FilledButton.styleFrom(
-                      backgroundColor: const Color(0xFF00BFA6),
+                      backgroundColor:
+                          const Color(0xFF00BFA6),
                       foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(
+                      padding:
+                          const EdgeInsets.symmetric(
                         horizontal: 20,
                         vertical: 13,
                       ),
                     ),
-                    child: const Text('Save Party'),
+                    child: _saving
+                        ? const SizedBox(
+                            width: 18,
+                            height: 18,
+                            child:
+                                CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: Colors.white,
+                            ),
+                          )
+                        : const Text('Save Party'),
                   ),
                 ],
               ),
@@ -1042,21 +1285,66 @@ class _DashboardCard extends StatelessWidget {
         ),
       ),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment:
+            CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              Text(
-                title,
-                style: const TextStyle(
-                  fontSize: 15,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-              const Spacer(),
-            ],
+          Text(
+            title,
+            style: const TextStyle(
+              fontSize: 15,
+              fontWeight: FontWeight.w600,
+            ),
           ),
           child,
+        ],
+      ),
+    );
+  }
+}
+
+class _ErrorState extends StatelessWidget {
+  final String message;
+  final VoidCallback onRetry;
+
+  const _ErrorState({
+    required this.message,
+    required this.onRetry,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.all(40),
+      child: Column(
+        children: [
+          const Icon(
+            Icons.cloud_off_outlined,
+            size: 42,
+            color: Color(0xFFB66A6A),
+          ),
+          const SizedBox(height: 12),
+          const Text(
+            'Could not load parties',
+            style: TextStyle(
+              color: Color(0xFFE0A0A0),
+              fontSize: 14,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            message,
+            textAlign: TextAlign.center,
+            style: const TextStyle(
+              color: Color(0xFF71808D),
+              fontSize: 11,
+            ),
+          ),
+          const SizedBox(height: 16),
+          OutlinedButton.icon(
+            onPressed: onRetry,
+            icon: const Icon(Icons.refresh),
+            label: const Text('Retry'),
+          ),
         ],
       ),
     );
