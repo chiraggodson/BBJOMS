@@ -3,11 +3,11 @@ const cors = require('cors');
 
 const app = express();
 
-const partyRoutes =
-  require('./routes/party.routes');
-
-const jobRoutes =
-  require('./routes/job.routes');
+const partyRoutes = require('./routes/party.routes');
+const jobRoutes = require('./routes/job.routes');
+const fabricRoutes = require('./routes/fabric.routes');
+const machineRoutes = require('./routes/machine.routes');
+const yarnRoutes = require('./routes/yarn.routes');
 
 app.use(cors());
 app.use(express.json());
@@ -22,12 +22,9 @@ app.get('/api/health', (req, res) => {
 
 app.get('/api/health/database', async (req, res) => {
   try {
-    const {
-      testDatabaseConnection,
-    } = require('./db');
+    const { testDatabaseConnection } = require('./db');
 
-    const result =
-      await testDatabaseConnection();
+    const result = await testDatabaseConnection();
 
     res.json({
       success: true,
@@ -37,26 +34,21 @@ app.get('/api/health/database', async (req, res) => {
   } catch (error) {
     console.error(
       'Database health check failed:',
-      error,
+      error
     );
 
     res.status(500).json({
       success: false,
       database: 'disconnected',
-      error:
-        'Database connection failed',
+      error: 'Database connection failed',
     });
   }
 });
 
-app.use(
-  '/api/parties',
-  partyRoutes,
-);
-
-app.use(
-  '/api/jobs',
-  jobRoutes,
-);
+app.use('/api/parties', partyRoutes);
+app.use('/api/jobs', jobRoutes);
+app.use('/api/fabrics', fabricRoutes);
+app.use('/api/machines', machineRoutes);
+app.use('/api/yarns', yarnRoutes);
 
 module.exports = app;

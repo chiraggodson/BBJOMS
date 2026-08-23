@@ -846,6 +846,120 @@ class ApiService {
         .toList();
   }
 
+Future<Fabric> createFabric({
+  required String fabricCode,
+  required String name,
+  String? description,
+  double? gsm,
+  String? composition,
+  double? widthInches,
+}) async {
+  final response = await http.post(
+    Uri.parse('$baseUrl/fabrics'),
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: jsonEncode({
+      'fabric_code': fabricCode,
+      'name': name,
+      'description': description,
+      'gsm': gsm,
+      'composition': composition,
+      'width_inches': widthInches,
+    }),
+  );
+
+  final data = _decodeMap(response.body);
+
+  if (response.statusCode != 201 ||
+      data['success'] != true) {
+    throw ApiException(
+      data['error']?.toString() ??
+          'Failed to create fabric',
+      response.statusCode,
+    );
+  }
+
+  return Fabric.fromJson(
+    Map<String, dynamic>.from(
+      data['fabric'] as Map,
+    ),
+  );
+}
+
+Future<Fabric> updateFabric({
+  required int id,
+  required String fabricCode,
+  required String name,
+  String? description,
+  double? gsm,
+  String? composition,
+  double? widthInches,
+  bool isActive = true,
+}) async {
+  final response = await http.put(
+    Uri.parse('$baseUrl/fabrics/$id'),
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: jsonEncode({
+      'fabric_code': fabricCode,
+      'name': name,
+      'description': description,
+      'gsm': gsm,
+      'composition': composition,
+      'width_inches': widthInches,
+      'is_active': isActive,
+    }),
+  );
+
+  final data = _decodeMap(response.body);
+
+  if (response.statusCode != 200 ||
+      data['success'] != true) {
+    throw ApiException(
+      data['error']?.toString() ??
+          'Failed to update fabric',
+      response.statusCode,
+    );
+  }
+
+  return Fabric.fromJson(
+    Map<String, dynamic>.from(
+      data['fabric'] as Map,
+    ),
+  );
+}
+
+Future<void> deactivateFabric(int id) async {
+  final response = await http.delete(
+    Uri.parse('$baseUrl/fabrics/$id'),
+  );
+
+  final data = _decodeMap(response.body);
+
+  if (response.statusCode != 200 ||
+      data['success'] != true) {
+    throw ApiException(
+      data['error']?.toString() ??
+          'Failed to deactivate fabric',
+      response.statusCode,
+    );
+  }
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
   // ============================================================
   // HELPERS
   // ============================================================
@@ -997,23 +1111,51 @@ class PartyStats {
 // ============================================================
 // FABRIC MODEL
 // ============================================================
-
 class Fabric {
   final int id;
+  final String fabricCode;
   final String name;
   final String description;
+  final double? gsm;
+  final String composition;
+  final double? widthInches;
+  final bool isActive;
 
   const Fabric({
     required this.id,
+    required this.fabricCode,
     required this.name,
     required this.description,
+    required this.gsm,
+    required this.composition,
+    required this.widthInches,
+    required this.isActive,
   });
 
-  factory Fabric.fromJson(Map<String, dynamic> json) {
+  factory Fabric.fromJson(
+    Map<String, dynamic> json,
+  ) {
     return Fabric(
       id: _toInt(json['id']),
-      name: json['name']?.toString() ?? '',
-      description: json['description']?.toString() ?? '',
+      fabricCode:
+          json['fabric_code']?.toString() ?? '',
+      name:
+          json['name']?.toString() ?? '',
+      description:
+          json['description']?.toString() ?? '',
+      gsm: json['gsm'] == null
+          ? null
+          : _toDouble(json['gsm']),
+      composition:
+          json['composition']?.toString() ?? '',
+      widthInches:
+          json['width_inches'] == null
+              ? null
+              : _toDouble(
+                  json['width_inches'],
+                ),
+      isActive:
+          json['is_active'] == true,
     );
   }
 }
