@@ -107,7 +107,7 @@ class _PartiesPageState extends State<PartiesPage> {
     }).toList();
   }
 
-  Future<void> _openPartyForm() async {
+  Future<void> _openNewParty() async {
     final saved = await showDialog<bool>(
       context: context,
       builder: (_) => const _PartyFormDialog(),
@@ -115,10 +115,38 @@ class _PartiesPageState extends State<PartiesPage> {
 
     if (saved == true) {
       await _refresh();
+
+      if (!mounted) return;
+
+      _showSuccess('Party created successfully.');
     }
   }
 
+  Future<void> _openParty(Party party) async {
+    await showDialog<void>(
+      context: context,
+      builder: (_) => _PartyDetailsDialog(
+        party: party,
+        apiService: _apiService,
+        onChanged: _refresh,
+      ),
+    );
+  }
+
+  void _showSuccess(String message) {
+    if (!mounted) return;
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: const Color(0xFF087F6B),
+      ),
+    );
+  }
+
   void _showError(String message) {
+    if (!mounted) return;
+
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(message),
@@ -162,13 +190,13 @@ class _PartiesPageState extends State<PartiesPage> {
                 ),
               ),
               IconButton(
-                onPressed: _refresh,
+                onPressed: _loading ? null : _refresh,
                 tooltip: 'Refresh',
                 icon: const Icon(Icons.refresh),
               ),
               const SizedBox(width: 8),
               FilledButton.icon(
-                onPressed: _openPartyForm,
+                onPressed: _openNewParty,
                 icon: const Icon(Icons.add, size: 18),
                 label: const Text('New Party'),
                 style: FilledButton.styleFrom(
@@ -279,7 +307,10 @@ class _PartiesPageState extends State<PartiesPage> {
                     ),
                   )
                 else
-                  _PartyTable(parties: parties),
+                  _PartyTable(
+                    parties: parties,
+                    onPartyTap: _openParty,
+                  ),
               ],
             ),
           ),
@@ -431,9 +462,11 @@ class _PartyStatCard extends StatelessWidget {
 
 class _PartyTable extends StatelessWidget {
   final List<Party> parties;
+  final Future<void> Function(Party party) onPartyTap;
 
   const _PartyTable({
     required this.parties,
+    required this.onPartyTap,
   });
 
   @override
@@ -445,59 +478,63 @@ class _PartyTable extends StatelessWidget {
         if (compact) {
           return Column(
             children: parties.map((party) {
-              return Container(
-                padding: const EdgeInsets.symmetric(
-                  vertical: 14,
-                ),
-                decoration: const BoxDecoration(
-                  border: Border(
-                    bottom: BorderSide(
-                      color: Color(0xFF1D2933),
+              return InkWell(
+                onTap: () => onPartyTap(party),
+                borderRadius: BorderRadius.circular(8),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    vertical: 14,
+                  ),
+                  decoration: const BoxDecoration(
+                    border: Border(
+                      bottom: BorderSide(
+                        color: Color(0xFF1D2933),
+                      ),
                     ),
                   ),
-                ),
-                child: Row(
-                  children: [
-                    const CircleAvatar(
-                      radius: 18,
-                      backgroundColor: Color(0xFF153A38),
-                      child: Icon(
-                        Icons.business_outlined,
-                        color: Color(0xFF00BFA6),
-                        size: 18,
+                  child: Row(
+                    children: [
+                      const CircleAvatar(
+                        radius: 18,
+                        backgroundColor: Color(0xFF153A38),
+                        child: Icon(
+                          Icons.business_outlined,
+                          color: Color(0xFF00BFA6),
+                          size: 18,
+                        ),
                       ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment:
-                            CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            party.name,
-                            style: const TextStyle(
-                              fontWeight: FontWeight.w600,
-                              fontSize: 13,
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment:
+                              CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              party.name,
+                              style: const TextStyle(
+                                fontWeight: FontWeight.w600,
+                                fontSize: 13,
+                              ),
                             ),
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            '${party.partyCode} • '
-                            '${party.city.isEmpty ? '—' : party.city} • '
-                            '${party.roles.join(', ')}',
-                            style: const TextStyle(
-                              color: Color(0xFF71808D),
-                              fontSize: 11,
+                            const SizedBox(height: 4),
+                            Text(
+                              '${party.partyCode} • '
+                              '${party.city.isEmpty ? '—' : party.city} • '
+                              '${party.roles.join(', ')}',
+                              style: const TextStyle(
+                                color: Color(0xFF71808D),
+                                fontSize: 11,
+                              ),
                             ),
-                          ),
-                        ],
+                          ],
+                        ),
                       ),
-                    ),
-                    const Icon(
-                      Icons.chevron_right,
-                      color: Color(0xFF53616D),
-                    ),
-                  ],
+                      const Icon(
+                        Icons.chevron_right,
+                        color: Color(0xFF53616D),
+                      ),
+                    ],
+                  ),
                 ),
               );
             }).toList(),
@@ -550,107 +587,115 @@ class _PartyTable extends StatelessWidget {
               ),
             ),
             ...parties.map(
-              (party) => Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 14,
-                  vertical: 14,
-                ),
-                decoration: const BoxDecoration(
-                  border: Border(
-                    bottom: BorderSide(
-                      color: Color(0xFF1D2933),
+              (party) => Material(
+                color: Colors.transparent,
+                child: InkWell(
+                  onTap: () => onPartyTap(party),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 14,
+                      vertical: 14,
+                    ),
+                    decoration: const BoxDecoration(
+                      border: Border(
+                        bottom: BorderSide(
+                          color: Color(0xFF1D2933),
+                        ),
+                      ),
+                    ),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          flex: 3,
+                          child: Row(
+                            children: [
+                              const CircleAvatar(
+                                radius: 17,
+                                backgroundColor: Color(0xFF153A38),
+                                child: Icon(
+                                  Icons.business_outlined,
+                                  color: Color(0xFF00BFA6),
+                                  size: 17,
+                                ),
+                              ),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment:
+                                      CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      party.name,
+                                      overflow:
+                                          TextOverflow.ellipsis,
+                                      style: const TextStyle(
+                                        fontWeight:
+                                            FontWeight.w600,
+                                        fontSize: 12,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 2),
+                                    Text(
+                                      party.partyCode,
+                                      style: const TextStyle(
+                                        color:
+                                            Color(0xFF53616D),
+                                        fontSize: 10,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        Expanded(
+                          flex: 2,
+                          child: Wrap(
+                            spacing: 5,
+                            runSpacing: 4,
+                            children: party.roles
+                                .map(
+                                  (role) => _RoleChip(
+                                    role: role,
+                                  ),
+                                )
+                                .toList(),
+                          ),
+                        ),
+                        Expanded(
+                          flex: 2,
+                          child: Text(
+                            party.city.isEmpty
+                                ? '—'
+                                : party.city,
+                            style: const TextStyle(
+                              color: Color(0xFF9BA7B2),
+                              fontSize: 12,
+                            ),
+                          ),
+                        ),
+                        Expanded(
+                          flex: 3,
+                          child: Text(
+                            party.gstin.isEmpty
+                                ? '—'
+                                : party.gstin,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              color: Color(0xFF71808D),
+                              fontSize: 11,
+                            ),
+                          ),
+                        ),
+                        const Icon(
+                          Icons.chevron_right,
+                          size: 20,
+                          color: Color(0xFF53616D),
+                        ),
+                      ],
                     ),
                   ),
-                ),
-                child: Row(
-                  children: [
-                    Expanded(
-                      flex: 3,
-                      child: Row(
-                        children: [
-                          const CircleAvatar(
-                            radius: 17,
-                            backgroundColor: Color(0xFF153A38),
-                            child: Icon(
-                              Icons.business_outlined,
-                              color: Color(0xFF00BFA6),
-                              size: 17,
-                            ),
-                          ),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment:
-                                  CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  party.name,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: const TextStyle(
-                                    fontWeight: FontWeight.w600,
-                                    fontSize: 12,
-                                  ),
-                                ),
-                                const SizedBox(height: 2),
-                                Text(
-                                  party.partyCode,
-                                  style: const TextStyle(
-                                    color: Color(0xFF53616D),
-                                    fontSize: 10,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    Expanded(
-                      flex: 2,
-                      child: Wrap(
-                        spacing: 5,
-                        runSpacing: 4,
-                        children: party.roles
-                            .map(
-                              (role) => _RoleChip(
-                                role: role,
-                              ),
-                            )
-                            .toList(),
-                      ),
-                    ),
-                    Expanded(
-                      flex: 2,
-                      child: Text(
-                        party.city.isEmpty ? '—' : party.city,
-                        style: const TextStyle(
-                          color: Color(0xFF9BA7B2),
-                          fontSize: 12,
-                        ),
-                      ),
-                    ),
-                    Expanded(
-                      flex: 3,
-                      child: Text(
-                        party.gstin.isEmpty
-                            ? '—'
-                            : party.gstin,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          color: Color(0xFF71808D),
-                          fontSize: 11,
-                        ),
-                      ),
-                    ),
-                    IconButton(
-                      onPressed: () {},
-                      icon: const Icon(
-                        Icons.more_horiz,
-                        size: 18,
-                        color: Color(0xFF71808D),
-                      ),
-                    ),
-                  ],
                 ),
               ),
             ),
@@ -701,14 +746,511 @@ class _TableHeaderStyle {
   );
 }
 
-class _PartyFormDialog extends StatefulWidget {
-  const _PartyFormDialog();
+class _PartyDetailsDialog extends StatefulWidget {
+  final Party party;
+  final ApiService apiService;
+  final Future<void> Function() onChanged;
+
+  const _PartyDetailsDialog({
+    required this.party,
+    required this.apiService,
+    required this.onChanged,
+  });
 
   @override
-  State<_PartyFormDialog> createState() => _PartyFormDialogState();
+  State<_PartyDetailsDialog> createState() =>
+      _PartyDetailsDialogState();
 }
 
-class _PartyFormDialogState extends State<_PartyFormDialog> {
+class _PartyDetailsDialogState
+    extends State<_PartyDetailsDialog> {
+  late Party _party;
+  bool _loading = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _party = widget.party;
+    _loadLatestParty();
+  }
+
+  Future<void> _loadLatestParty() async {
+    try {
+      final party =
+          await widget.apiService.getParty(_party.id);
+
+      if (!mounted) return;
+
+      setState(() {
+        _party = party;
+      });
+    } catch (_) {
+      // The party already exists in the list.
+      // Keep displaying the existing data if the detail request fails.
+    }
+  }
+
+  Future<void> _editParty() async {
+    final updated = await showDialog<bool>(
+      context: context,
+      builder: (_) => _PartyFormDialog(
+        party: _party,
+      ),
+    );
+
+    if (updated != true) return;
+
+    await widget.onChanged();
+
+    if (!mounted) return;
+
+    try {
+      final latest =
+          await widget.apiService.getParty(_party.id);
+
+      if (!mounted) return;
+
+      setState(() {
+        _party = latest;
+      });
+    } catch (_) {}
+
+    _showSuccess('Party updated successfully.');
+  }
+
+  Future<void> _deactivateParty() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          backgroundColor: const Color(0xFF111A22),
+          title: const Text('Deactivate Party?'),
+          content: Text(
+            'Are you sure you want to deactivate '
+            '${_party.name}?\n\n'
+            'The party will no longer appear in the active '
+            'party list, but its records will be retained.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              style: FilledButton.styleFrom(
+                backgroundColor: const Color(0xFF7A2525),
+              ),
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Deactivate'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (confirmed != true) return;
+
+    setState(() {
+      _loading = true;
+    });
+
+    try {
+      await widget.apiService.deactivateParty(_party.id);
+
+      await widget.onChanged();
+
+      if (!mounted) return;
+
+      Navigator.pop(context);
+
+      _showSuccess('Party deactivated successfully.');
+    } catch (error) {
+      if (!mounted) return;
+
+      setState(() {
+        _loading = false;
+      });
+
+      _showError('Could not deactivate party: $error');
+    }
+  }
+
+  void _showSuccess(String message) {
+    if (!mounted) return;
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: const Color(0xFF087F6B),
+      ),
+    );
+  }
+
+  void _showError(String message) {
+    if (!mounted) return;
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: const Color(0xFF7A2525),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Dialog(
+      backgroundColor: const Color(0xFF111A22),
+      insetPadding: const EdgeInsets.all(24),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(
+          maxWidth: 850,
+          maxHeight: 760,
+        ),
+        child: Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(
+                24,
+                20,
+                16,
+                18,
+              ),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment:
+                          CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          _party.name,
+                          style: const TextStyle(
+                            fontSize: 21,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          '${_party.partyCode} • '
+                          '${_party.isActive ? 'Active' : 'Inactive'}',
+                          style: TextStyle(
+                            color: _party.isActive
+                                ? const Color(0xFF62D9C9)
+                                : const Color(0xFFE0A0A0),
+                            fontSize: 11,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  IconButton(
+                    onPressed: _loading
+                        ? null
+                        : () => Navigator.pop(context),
+                    icon: const Icon(Icons.close),
+                  ),
+                ],
+              ),
+            ),
+            const Divider(
+              height: 1,
+              color: Color(0xFF25313B),
+            ),
+            Expanded(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.all(24),
+                child: Column(
+                  crossAxisAlignment:
+                      CrossAxisAlignment.start,
+                  children: [
+                    _DetailsSection(
+                      title: 'Party Information',
+                      icon: Icons.business_outlined,
+                      children: [
+                        _DetailItem(
+                          label: 'Party Name',
+                          value: _party.name,
+                        ),
+                        _DetailItem(
+                          label: 'Print Alias',
+                          value: _party.alias,
+                        ),
+                        _DetailItem(
+                          label: 'Party Code',
+                          value: _party.partyCode,
+                        ),
+                        _DetailItem(
+                          label: 'Status',
+                          value: _party.isActive
+                              ? 'Active'
+                              : 'Inactive',
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 24),
+                    _DetailsSection(
+                      title: 'Party Roles',
+                      icon: Icons.badge_outlined,
+                      children: [
+                        if (_party.roles.isEmpty)
+                          const _DetailItem(
+                            label: 'Roles',
+                            value: '—',
+                          )
+                        else
+                          Padding(
+                            padding: const EdgeInsets.only(
+                              top: 8,
+                            ),
+                            child: Wrap(
+                              spacing: 8,
+                              runSpacing: 8,
+                              children: _party.roles
+                                  .map(
+                                    (role) => _RoleChip(
+                                      role: role,
+                                    ),
+                                  )
+                                  .toList(),
+                            ),
+                          ),
+                      ],
+                    ),
+                    const SizedBox(height: 24),
+                    _DetailsSection(
+                      title: 'Tax & Registration',
+                      icon: Icons.receipt_long_outlined,
+                      children: [
+                        _DetailItem(
+                          label: 'GSTIN',
+                          value: _party.gstin,
+                        ),
+                        _DetailItem(
+                          label: 'PAN',
+                          value: _party.pan,
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 24),
+                    _DetailsSection(
+                      title: 'Address',
+                      icon: Icons.location_on_outlined,
+                      children: [
+                        _DetailItem(
+                          label: 'Address Line 1',
+                          value: _party.addressLine1,
+                        ),
+                        _DetailItem(
+                          label: 'Address Line 2',
+                          value: _party.addressLine2,
+                        ),
+                        _DetailItem(
+                          label: 'City',
+                          value: _party.city,
+                        ),
+                        _DetailItem(
+                          label: 'State',
+                          value: _party.state,
+                        ),
+                        _DetailItem(
+                          label: 'PIN Code',
+                          value: _party.pinCode,
+                        ),
+                        _DetailItem(
+                          label: 'Country',
+                          value: _party.country,
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 24),
+                    _DetailsSection(
+                      title: 'Contact',
+                      icon: Icons.contact_phone_outlined,
+                      children: [
+                        _DetailItem(
+                          label: 'Contact Person',
+                          value: _party.contactPerson,
+                        ),
+                        _DetailItem(
+                          label: 'Phone',
+                          value: _party.phone,
+                        ),
+                        _DetailItem(
+                          label: 'Email',
+                          value: _party.email,
+                        ),
+                      ],
+                    ),
+                    if (_party.notes.isNotEmpty) ...[
+                      const SizedBox(height: 24),
+                      _DetailsSection(
+                        title: 'Notes',
+                        icon: Icons.notes_outlined,
+                        children: [
+                          _DetailItem(
+                            label: 'Notes',
+                            value: _party.notes,
+                          ),
+                        ],
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ),
+            const Divider(
+              height: 1,
+              color: Color(0xFF25313B),
+            ),
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: Row(
+                mainAxisAlignment:
+                    MainAxisAlignment.end,
+                children: [
+                  TextButton(
+                    onPressed: _loading
+                        ? null
+                        : _deactivateParty,
+                    style: TextButton.styleFrom(
+                      foregroundColor:
+                          const Color(0xFFE0A0A0),
+                    ),
+                    child: const Text('Deactivate'),
+                  ),
+                  const SizedBox(width: 10),
+                  FilledButton.icon(
+                    onPressed:
+                        _loading ? null : _editParty,
+                    icon: const Icon(
+                      Icons.edit_outlined,
+                      size: 17,
+                    ),
+                    label: const Text('Edit Party'),
+                    style: FilledButton.styleFrom(
+                      backgroundColor:
+                          const Color(0xFF00BFA6),
+                      foregroundColor: Colors.white,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _DetailsSection extends StatelessWidget {
+  final String title;
+  final IconData icon;
+  final List<Widget> children;
+
+  const _DetailsSection({
+    required this.title,
+    required this.icon,
+    required this.children,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Icon(
+              icon,
+              size: 18,
+              color: const Color(0xFF00BFA6),
+            ),
+            const SizedBox(width: 8),
+            Text(
+              title,
+              style: const TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: const Color(0xFF0F171E),
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(
+              color: const Color(0xFF1E2A34),
+            ),
+          ),
+          child: Wrap(
+            spacing: 24,
+            runSpacing: 18,
+            children: children,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _DetailItem extends StatelessWidget {
+  final String label;
+  final String value;
+
+  const _DetailItem({
+    required this.label,
+    required this.value,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: 250,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label,
+            style: const TextStyle(
+              color: Color(0xFF71808D),
+              fontSize: 10,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            value.isEmpty ? '—' : value,
+            style: const TextStyle(
+              color: Color(0xFFD7DEE4),
+              fontSize: 12,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _PartyFormDialog extends StatefulWidget {
+  final Party? party;
+
+  const _PartyFormDialog({
+    this.party,
+  });
+
+  @override
+  State<_PartyFormDialog> createState() =>
+      _PartyFormDialogState();
+}
+
+class _PartyFormDialogState
+    extends State<_PartyFormDialog> {
   final _formKey = GlobalKey<FormState>();
   final ApiService _apiService = ApiService();
 
@@ -739,6 +1281,35 @@ class _PartyFormDialogState extends State<_PartyFormDialog> {
     'Other',
   ];
 
+  bool get _isEditing => widget.party != null;
+
+  @override
+  void initState() {
+    super.initState();
+
+    final party = widget.party;
+
+    if (party != null) {
+      _nameController.text = party.name;
+      _aliasController.text = party.alias;
+      _gstinController.text = party.gstin;
+      _panController.text = party.pan;
+      _address1Controller.text = party.addressLine1;
+      _address2Controller.text = party.addressLine2;
+      _cityController.text = party.city;
+      _stateController.text = party.state;
+      _pinController.text = party.pinCode;
+      _contactController.text = party.contactPerson;
+      _phoneController.text = party.phone;
+      _emailController.text = party.email;
+      _notesController.text = party.notes;
+
+      _roles
+        ..clear()
+        ..addAll(party.roles);
+    }
+  }
+
   @override
   void dispose() {
     _nameController.dispose();
@@ -754,6 +1325,7 @@ class _PartyFormDialogState extends State<_PartyFormDialog> {
     _phoneController.dispose();
     _emailController.dispose();
     _notesController.dispose();
+
     super.dispose();
   }
 
@@ -789,6 +1361,7 @@ class _PartyFormDialogState extends State<_PartyFormDialog> {
 
   String? _clean(String value) {
     final cleaned = value.trim();
+
     return cleaned.isEmpty ? null : cleaned;
   }
 
@@ -813,37 +1386,56 @@ class _PartyFormDialogState extends State<_PartyFormDialog> {
     });
 
     try {
-      await _apiService.createParty(
-        name: _nameController.text.trim(),
-        alias: _clean(_aliasController.text),
-        gstin: _clean(_gstinController.text),
-        pan: _clean(_panController.text),
-        addressLine1: _clean(_address1Controller.text),
-        addressLine2: _clean(_address2Controller.text),
-        city: _clean(_cityController.text),
-        state: _clean(_stateController.text),
-        pinCode: _clean(_pinController.text),
-        country: 'India',
-        contactPerson: _clean(_contactController.text),
-        phone: _clean(_phoneController.text),
-        email: _clean(_emailController.text),
-        roles: _roles.toList(),
-        isActive: true,
-        notes: _clean(_notesController.text),
-      );
+      if (_isEditing) {
+        await _apiService.updateParty(
+          id: widget.party!.id,
+          name: _nameController.text.trim(),
+          alias: _clean(_aliasController.text),
+          gstin: _clean(_gstinController.text),
+          pan: _clean(_panController.text),
+          addressLine1:
+              _clean(_address1Controller.text),
+          addressLine2:
+              _clean(_address2Controller.text),
+          city: _clean(_cityController.text),
+          state: _clean(_stateController.text),
+          pinCode: _clean(_pinController.text),
+          country: 'India',
+          contactPerson:
+              _clean(_contactController.text),
+          phone: _clean(_phoneController.text),
+          email: _clean(_emailController.text),
+          roles: _roles.toList(),
+          isActive: widget.party!.isActive,
+          notes: _clean(_notesController.text),
+        );
+      } else {
+        await _apiService.createParty(
+          name: _nameController.text.trim(),
+          alias: _clean(_aliasController.text),
+          gstin: _clean(_gstinController.text),
+          pan: _clean(_panController.text),
+          addressLine1:
+              _clean(_address1Controller.text),
+          addressLine2:
+              _clean(_address2Controller.text),
+          city: _clean(_cityController.text),
+          state: _clean(_stateController.text),
+          pinCode: _clean(_pinController.text),
+          country: 'India',
+          contactPerson:
+              _clean(_contactController.text),
+          phone: _clean(_phoneController.text),
+          email: _clean(_emailController.text),
+          roles: _roles.toList(),
+          isActive: true,
+          notes: _clean(_notesController.text),
+        );
+      }
 
       if (!mounted) return;
 
       Navigator.pop(context, true);
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            'Party saved successfully.',
-          ),
-          backgroundColor: Color(0xFF087F6B),
-        ),
-      );
     } catch (error) {
       if (!mounted) return;
 
@@ -883,22 +1475,26 @@ class _PartyFormDialogState extends State<_PartyFormDialog> {
               ),
               child: Row(
                 children: [
-                  const Expanded(
+                  Expanded(
                     child: Column(
                       crossAxisAlignment:
                           CrossAxisAlignment.start,
                       children: [
                         Text(
-                          'New Party',
-                          style: TextStyle(
+                          _isEditing
+                              ? 'Edit Party'
+                              : 'New Party',
+                          style: const TextStyle(
                             fontSize: 20,
                             fontWeight: FontWeight.w700,
                           ),
                         ),
-                        SizedBox(height: 4),
+                        const SizedBox(height: 4),
                         Text(
-                          'Create a business party and assign its roles',
-                          style: TextStyle(
+                          _isEditing
+                              ? 'Update party information and roles'
+                              : 'Create a business party and assign its roles',
+                          style: const TextStyle(
                             color: Color(0xFF71808D),
                             fontSize: 11,
                           ),
@@ -907,8 +1503,9 @@ class _PartyFormDialogState extends State<_PartyFormDialog> {
                     ),
                   ),
                   IconButton(
-                    onPressed:
-                        _saving ? null : () => Navigator.pop(context),
+                    onPressed: _saving
+                        ? null
+                        : () => Navigator.pop(context),
                     icon: const Icon(Icons.close),
                   ),
                 ],
@@ -941,6 +1538,7 @@ class _PartyFormDialogState extends State<_PartyFormDialog> {
                               value.trim().isEmpty) {
                             return 'Party name is required';
                           }
+
                           return null;
                         },
                       ),
@@ -963,7 +1561,8 @@ class _PartyFormDialogState extends State<_PartyFormDialog> {
                       Wrap(
                         spacing: 8,
                         runSpacing: 8,
-                        children: _availableRoles.map((role) {
+                        children:
+                            _availableRoles.map((role) {
                           final selected =
                               _roles.contains(role);
 
@@ -995,16 +1594,21 @@ class _PartyFormDialogState extends State<_PartyFormDialog> {
                       const SizedBox(height: 24),
                       const _FormSectionTitle(
                         title: 'Tax & Registration',
-                        icon: Icons.receipt_long_outlined,
+                        icon:
+                            Icons.receipt_long_outlined,
                       ),
                       const SizedBox(height: 14),
                       LayoutBuilder(
-                        builder: (context, constraints) {
+                        builder:
+                            (context, constraints) {
                           final twoColumns =
-                              constraints.maxWidth > 650;
+                              constraints.maxWidth >
+                                  650;
 
                           final width = twoColumns
-                              ? (constraints.maxWidth - 14) / 2
+                              ? (constraints.maxWidth -
+                                      14) /
+                                  2
                               : constraints.maxWidth;
 
                           return Wrap(
@@ -1036,16 +1640,21 @@ class _PartyFormDialogState extends State<_PartyFormDialog> {
                       const SizedBox(height: 24),
                       const _FormSectionTitle(
                         title: 'Address',
-                        icon: Icons.location_on_outlined,
+                        icon:
+                            Icons.location_on_outlined,
                       ),
                       const SizedBox(height: 14),
                       LayoutBuilder(
-                        builder: (context, constraints) {
+                        builder:
+                            (context, constraints) {
                           final twoColumns =
-                              constraints.maxWidth > 650;
+                              constraints.maxWidth >
+                                  650;
 
                           final width = twoColumns
-                              ? (constraints.maxWidth - 14) / 2
+                              ? (constraints.maxWidth -
+                                      14) /
+                                  2
                               : constraints.maxWidth;
 
                           return Wrap(
@@ -1057,7 +1666,8 @@ class _PartyFormDialogState extends State<_PartyFormDialog> {
                                 child: TextFormField(
                                   controller:
                                       _address1Controller,
-                                  decoration: _decoration(
+                                  decoration:
+                                      _decoration(
                                     'Address Line 1',
                                   ),
                                 ),
@@ -1067,7 +1677,8 @@ class _PartyFormDialogState extends State<_PartyFormDialog> {
                                 child: TextFormField(
                                   controller:
                                       _address2Controller,
-                                  decoration: _decoration(
+                                  decoration:
+                                      _decoration(
                                     'Address Line 2',
                                   ),
                                 ),
@@ -1096,7 +1707,9 @@ class _PartyFormDialogState extends State<_PartyFormDialog> {
                                   controller:
                                       _pinController,
                                   decoration:
-                                      _decoration('PIN Code'),
+                                      _decoration(
+                                    'PIN Code',
+                                  ),
                                 ),
                               ),
                               SizedBox(
@@ -1104,7 +1717,9 @@ class _PartyFormDialogState extends State<_PartyFormDialog> {
                                 child: TextFormField(
                                   initialValue: 'India',
                                   decoration:
-                                      _decoration('Country'),
+                                      _decoration(
+                                    'Country',
+                                  ),
                                   enabled: false,
                                 ),
                               ),
@@ -1115,16 +1730,21 @@ class _PartyFormDialogState extends State<_PartyFormDialog> {
                       const SizedBox(height: 24),
                       const _FormSectionTitle(
                         title: 'Contact',
-                        icon: Icons.contact_phone_outlined,
+                        icon:
+                            Icons.contact_phone_outlined,
                       ),
                       const SizedBox(height: 14),
                       LayoutBuilder(
-                        builder: (context, constraints) {
+                        builder:
+                            (context, constraints) {
                           final twoColumns =
-                              constraints.maxWidth > 650;
+                              constraints.maxWidth >
+                                  650;
 
                           final width = twoColumns
-                              ? (constraints.maxWidth - 14) / 2
+                              ? (constraints.maxWidth -
+                                      14) /
+                                  2
                               : constraints.maxWidth;
 
                           return Wrap(
@@ -1136,7 +1756,8 @@ class _PartyFormDialogState extends State<_PartyFormDialog> {
                                 child: TextFormField(
                                   controller:
                                       _contactController,
-                                  decoration: _decoration(
+                                  decoration:
+                                      _decoration(
                                     'Contact Person',
                                   ),
                                 ),
@@ -1146,7 +1767,8 @@ class _PartyFormDialogState extends State<_PartyFormDialog> {
                                 child: TextFormField(
                                   controller:
                                       _phoneController,
-                                  decoration: _decoration(
+                                  decoration:
+                                      _decoration(
                                     'Contact Number',
                                   ),
                                 ),
@@ -1159,7 +1781,8 @@ class _PartyFormDialogState extends State<_PartyFormDialog> {
                                   decoration:
                                       _decoration('Email'),
                                   keyboardType:
-                                      TextInputType.emailAddress,
+                                      TextInputType
+                                          .emailAddress,
                                 ),
                               ),
                               SizedBox(
@@ -1221,7 +1844,11 @@ class _PartyFormDialogState extends State<_PartyFormDialog> {
                               color: Colors.white,
                             ),
                           )
-                        : const Text('Save Party'),
+                        : Text(
+                            _isEditing
+                                ? 'Save Changes'
+                                : 'Save Party',
+                          ),
                   ),
                 ],
               ),

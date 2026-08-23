@@ -3,7 +3,7 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 
 class ApiService {
-  static const String baseUrl = 'http://localhost:4000/api';
+  static const String baseUrl = 'http://192.168.29.6:4000/api';
 
   Future<List<Party>> getParties({
     String? search,
@@ -26,7 +26,9 @@ class ApiService {
 
     final uri = Uri.parse(
       '$baseUrl/parties',
-    ).replace(queryParameters: queryParameters);
+    ).replace(
+      queryParameters: queryParameters,
+    );
 
     final response = await http.get(uri);
 
@@ -37,16 +39,19 @@ class ApiService {
       );
     }
 
-    final data = jsonDecode(response.body) as Map<String, dynamic>;
+    final data =
+        jsonDecode(response.body) as Map<String, dynamic>;
 
     if (data['success'] != true) {
       throw ApiException(
-        data['error']?.toString() ?? 'Failed to load parties',
+        data['error']?.toString() ??
+            'Failed to load parties',
         response.statusCode,
       );
     }
 
-    final parties = data['parties'] as List<dynamic>? ?? [];
+    final parties =
+        data['parties'] as List<dynamic>? ?? [];
 
     return parties
         .map(
@@ -57,8 +62,34 @@ class ApiService {
         .toList();
   }
 
+  Future<Party> getParty(int id) async {
+    final uri = Uri.parse(
+      '$baseUrl/parties/$id',
+    );
+
+    final response = await http.get(uri);
+
+    final data =
+        jsonDecode(response.body) as Map<String, dynamic>;
+
+    if (response.statusCode != 200 ||
+        data['success'] != true) {
+      throw ApiException(
+        data['error']?.toString() ??
+            'Failed to load party',
+        response.statusCode,
+      );
+    }
+
+    return Party.fromJson(
+      data['party'] as Map<String, dynamic>,
+    );
+  }
+
   Future<PartyStats> getPartyStats() async {
-    final uri = Uri.parse('$baseUrl/parties/stats');
+    final uri = Uri.parse(
+      '$baseUrl/parties/stats',
+    );
 
     final response = await http.get(uri);
 
@@ -69,11 +100,13 @@ class ApiService {
       );
     }
 
-    final data = jsonDecode(response.body) as Map<String, dynamic>;
+    final data =
+        jsonDecode(response.body) as Map<String, dynamic>;
 
     if (data['success'] != true) {
       throw ApiException(
-        data['error']?.toString() ?? 'Failed to load party statistics',
+        data['error']?.toString() ??
+            'Failed to load party statistics',
         response.statusCode,
       );
     }
@@ -101,7 +134,9 @@ class ApiService {
     bool isActive = true,
     String? notes,
   }) async {
-    final uri = Uri.parse('$baseUrl/parties');
+    final uri = Uri.parse(
+      '$baseUrl/parties',
+    );
 
     final body = <String, dynamic>{
       'name': name,
@@ -130,11 +165,14 @@ class ApiService {
       body: jsonEncode(body),
     );
 
-    final data = jsonDecode(response.body) as Map<String, dynamic>;
+    final data =
+        jsonDecode(response.body) as Map<String, dynamic>;
 
-    if (response.statusCode != 201 || data['success'] != true) {
+    if (response.statusCode != 201 ||
+        data['success'] != true) {
       throw ApiException(
-        data['error']?.toString() ?? 'Failed to create party',
+        data['error']?.toString() ??
+            'Failed to create party',
         response.statusCode,
       );
     }
@@ -163,7 +201,9 @@ class ApiService {
     bool isActive = true,
     String? notes,
   }) async {
-    final uri = Uri.parse('$baseUrl/parties/$id');
+    final uri = Uri.parse(
+      '$baseUrl/parties/$id',
+    );
 
     final body = <String, dynamic>{
       'name': name,
@@ -192,11 +232,14 @@ class ApiService {
       body: jsonEncode(body),
     );
 
-    final data = jsonDecode(response.body) as Map<String, dynamic>;
+    final data =
+        jsonDecode(response.body) as Map<String, dynamic>;
 
-    if (response.statusCode != 200 || data['success'] != true) {
+    if (response.statusCode != 200 ||
+        data['success'] != true) {
       throw ApiException(
-        data['error']?.toString() ?? 'Failed to update party',
+        data['error']?.toString() ??
+            'Failed to update party',
         response.statusCode,
       );
     }
@@ -207,15 +250,20 @@ class ApiService {
   }
 
   Future<void> deactivateParty(int id) async {
-    final uri = Uri.parse('$baseUrl/parties/$id');
+    final uri = Uri.parse(
+      '$baseUrl/parties/$id',
+    );
 
     final response = await http.delete(uri);
 
-    final data = jsonDecode(response.body) as Map<String, dynamic>;
+    final data =
+        jsonDecode(response.body) as Map<String, dynamic>;
 
-    if (response.statusCode != 200 || data['success'] != true) {
+    if (response.statusCode != 200 ||
+        data['success'] != true) {
       throw ApiException(
-        data['error']?.toString() ?? 'Failed to deactivate party',
+        data['error']?.toString() ??
+            'Failed to deactivate party',
         response.statusCode,
       );
     }
@@ -263,34 +311,53 @@ class Party {
     required this.roles,
   });
 
-  factory Party.fromJson(Map<String, dynamic> json) {
-    final rawRoles = json['roles'] as List<dynamic>? ?? [];
+  factory Party.fromJson(
+    Map<String, dynamic> json,
+  ) {
+    final rawRoles =
+        json['roles'] as List<dynamic>? ?? [];
 
     return Party(
       id: _toInt(json['id']),
-      partyCode: json['party_code']?.toString() ?? '',
+      partyCode:
+          json['party_code']?.toString() ?? '',
       name: json['name']?.toString() ?? '',
       alias: json['alias']?.toString() ?? '',
       gstin: json['gstin']?.toString() ?? '',
       pan: json['pan']?.toString() ?? '',
-      addressLine1: json['address_line1']?.toString() ?? '',
-      addressLine2: json['address_line2']?.toString() ?? '',
+      addressLine1:
+          json['address_line1']?.toString() ?? '',
+      addressLine2:
+          json['address_line2']?.toString() ?? '',
       city: json['city']?.toString() ?? '',
       state: json['state']?.toString() ?? '',
-      pinCode: json['pin_code']?.toString() ?? '',
-      country: json['country']?.toString() ?? 'India',
-      contactPerson: json['contact_person']?.toString() ?? '',
+      pinCode:
+          json['pin_code']?.toString() ?? '',
+      country:
+          json['country']?.toString() ?? 'India',
+      contactPerson:
+          json['contact_person']?.toString() ?? '',
       phone: json['phone']?.toString() ?? '',
       email: json['email']?.toString() ?? '',
       isActive: json['is_active'] == true,
       notes: json['notes']?.toString() ?? '',
-      roles: rawRoles.map((role) => role.toString()).toList(),
+      roles: rawRoles
+          .map(
+            (role) => role.toString(),
+          )
+          .toList(),
     );
   }
 
   static int _toInt(dynamic value) {
-    if (value is int) return value;
-    return int.tryParse(value?.toString() ?? '') ?? 0;
+    if (value is int) {
+      return value;
+    }
+
+    return int.tryParse(
+          value?.toString() ?? '',
+        ) ??
+        0;
   }
 }
 
@@ -313,21 +380,36 @@ class PartyStats {
     required this.fabricBuyers,
   });
 
-  factory PartyStats.fromJson(Map<String, dynamic> json) {
+  factory PartyStats.fromJson(
+    Map<String, dynamic> json,
+  ) {
     return PartyStats(
-      totalParties: _toInt(json['total_parties']),
-      activeParties: _toInt(json['active_parties']),
-      inactiveParties: _toInt(json['inactive_parties']),
-      customers: _toInt(json['customers']),
-      yarnSuppliers: _toInt(json['yarn_suppliers']),
-      jobWorkers: _toInt(json['job_workers']),
-      fabricBuyers: _toInt(json['fabric_buyers']),
+      totalParties:
+          _toInt(json['total_parties']),
+      activeParties:
+          _toInt(json['active_parties']),
+      inactiveParties:
+          _toInt(json['inactive_parties']),
+      customers:
+          _toInt(json['customers']),
+      yarnSuppliers:
+          _toInt(json['yarn_suppliers']),
+      jobWorkers:
+          _toInt(json['job_workers']),
+      fabricBuyers:
+          _toInt(json['fabric_buyers']),
     );
   }
 
   static int _toInt(dynamic value) {
-    if (value is int) return value;
-    return int.tryParse(value?.toString() ?? '') ?? 0;
+    if (value is int) {
+      return value;
+    }
+
+    return int.tryParse(
+          value?.toString() ?? '',
+        ) ??
+        0;
   }
 }
 
