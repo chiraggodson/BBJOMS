@@ -1464,9 +1464,9 @@ class _PartyDetailsDialogState
 
     } catch (_) {
 
-      // The party already exists in the list.
+      *// The party already exists in the list.*
 
-      // Keep displaying the existing data if the detail request fails.*
+      *// Keep displaying the existing data if the detail request fails.*
 
     }
 

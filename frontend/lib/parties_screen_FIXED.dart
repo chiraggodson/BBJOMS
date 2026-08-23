@@ -1464,9 +1464,9 @@ class _PartyDetailsDialogState
 
     } catch (_) {
 
-      // The party already exists in the list.
+      *// The party already exists in the list.*
 
-      // Keep displaying the existing data if the detail request fails.*
+      *// Keep displaying the existing data if the detail request fails.*
 
     }
 
@@ -1510,88 +1510,6 @@ class _PartyDetailsDialogState
 
     _showSuccess('Party updated successfully.');
 
-  }
-
-  Future<void> _reactivateParty() async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) {
-        return AlertDialog(
-          backgroundColor: const Color(0xFF111A22),
-          title: const Text('Reactivate Party?'),
-          content: Text(
-            'Are you sure you want to reactivate '
-            '${_party.name}?\n\n'
-            'The party will become available in the active '
-            'party list again.',
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context, false),
-              child: const Text('Cancel'),
-            ),
-            FilledButton(
-              style: FilledButton.styleFrom(
-                backgroundColor: const Color(0xFF087F6B),
-              ),
-              onPressed: () => Navigator.pop(context, true),
-              child: const Text('Reactivate'),
-            ),
-          ],
-        );
-      },
-    );
-
-    if (confirmed != true) return;
-
-    setState(() {
-      _loading = true;
-    });
-
-    try {
-      final updated = await widget.apiService.updateParty(
-        id: _party.id,
-        name: _party.name,
-        alias: _party.alias.isEmpty ? null : _party.alias,
-        gstin: _party.gstin.isEmpty ? null : _party.gstin,
-        pan: _party.pan.isEmpty ? null : _party.pan,
-        addressLine1:
-            _party.addressLine1.isEmpty ? null : _party.addressLine1,
-        addressLine2:
-            _party.addressLine2.isEmpty ? null : _party.addressLine2,
-        city: _party.city.isEmpty ? null : _party.city,
-        state: _party.state.isEmpty ? null : _party.state,
-        pinCode: _party.pinCode.isEmpty ? null : _party.pinCode,
-        country: _party.country.isEmpty ? 'India' : _party.country,
-        contactPerson:
-            _party.contactPerson.isEmpty ? null : _party.contactPerson,
-        phone: _party.phone.isEmpty ? null : _party.phone,
-        email: _party.email.isEmpty ? null : _party.email,
-        roles: _party.roles,
-        isActive: true,
-        notes: _party.notes.isEmpty ? null : _party.notes,
-      );
-
-      if (!mounted) return;
-
-      setState(() {
-        _party = updated;
-        _loading = false;
-      });
-
-      await widget.onChanged();
-
-      if (!mounted) return;
-
-      Navigator.pop(context);
-      _showSuccess('Party reactivated successfully.');
-    } catch (error) {
-      if (!mounted) return;
-      setState(() {
-        _loading = false;
-      });
-      _showError('Could not reactivate party: $error');
-    }
   }
 
   Future<void> _deactivateParty() async {
@@ -2148,57 +2066,25 @@ class _PartyDetailsDialogState
 
                 children: [
 
-                  if (_party.isActive)
+                  TextButton(
 
-                    TextButton(
+                    onPressed: _loading
 
-                      onPressed: _loading
+                        ? null
 
-                          ? null
+                        : _deactivateParty,
 
-                          : _deactivateParty,
+                    style: TextButton.styleFrom(
 
-                      style: TextButton.styleFrom(
+                      foregroundColor:
 
-                        foregroundColor:
-
-                            const Color(0xFFE0A0A0),
-
-                      ),
-
-                      child: const Text('Deactivate'),
-
-                    )
-
-                  else
-
-                    TextButton.icon(
-
-                      onPressed: _loading
-
-                          ? null
-
-                          : _reactivateParty,
-
-                      style: TextButton.styleFrom(
-
-                        foregroundColor:
-
-                            const Color(0xFF62D9C9),
-
-                      ),
-
-                      icon: const Icon(
-
-                        Icons.restore_outlined,
-
-                        size: 17,
-
-                      ),
-
-                      label: const Text('Reactivate'),
+                          const Color(0xFFE0A0A0),
 
                     ),
+
+                    child: const Text('Deactivate'),
+
+                  ),
 
                   const SizedBox(width: 10),
 
