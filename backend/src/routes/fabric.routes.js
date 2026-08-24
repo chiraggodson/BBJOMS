@@ -1,6 +1,46 @@
 const express = require('express');
+
 const router = express.Router();
+
 const { pool } = require('../db');
+
+// ============================================================
+// CURRENT COMPANY
+// ============================================================
+
+const COMPANY_ID =
+  '63558a5c-3815-4d4f-9f0d-7edfdf5d3f11';
+
+// ============================================================
+// HELPERS
+// ============================================================
+
+function mapFabric(row) {
+  return {
+    id: row.id,
+    company_id: row.company_id,
+    code: row.code || '',
+    name: row.name || '',
+    product_id: row.product_id,
+    design_no: row.design_no || '',
+    gsm: row.gsm == null ? null : Number(row.gsm),
+    width_inches:
+      row.width_inches == null
+        ? null
+        : Number(row.width_inches),
+    composition: row.composition || '',
+    stitch_length:
+      row.stitch_length == null
+        ? null
+        : Number(row.stitch_length),
+    gauge: row.gauge || '',
+    construction: row.construction || '',
+    unit_id: row.unit_id,
+    is_active: row.is_active === true,
+    created_at: row.created_at,
+    updated_at: row.updated_at,
+  };
+}
 
 // ============================================================
 // GET ALL FABRICS
@@ -12,41 +52,34 @@ router.get('/', async (req, res) => {
     const result = await pool.query(`
       SELECT
         id,
-        fabric_code,
+        company_id,
+        code,
         name,
-        description,
+        product_id,
+        design_no,
         gsm,
-        composition,
         width_inches,
+        composition,
+        stitch_length,
+        gauge,
+        construction,
+        unit_id,
         is_active,
         created_at,
         updated_at
-      FROM fabrics
-      WHERE is_active = TRUE
+      FROM master.fabrics
+      WHERE company_id = $1
+        AND is_active = TRUE
       ORDER BY name ASC
-    `);
+    `, [COMPANY_ID]);
 
-    const fabrics = result.rows.map((fabric) => ({
-      id: Number(fabric.id),
-      fabric_code: fabric.fabric_code || '',
-      name: fabric.name || '',
-      description: fabric.description || '',
-      gsm: fabric.gsm == null ? null : Number(fabric.gsm),
-      composition: fabric.composition || '',
-      width_inches:
-          fabric.width_inches == null
-              ? null
-              : Number(fabric.width_inches),
-      is_active: fabric.is_active === true,
-      created_at: fabric.created_at,
-      updated_at: fabric.updated_at,
-    }));
-
-    res.status(200).json(fabrics);
+    return res.status(200).json(
+      result.rows.map(mapFabric)
+    );
   } catch (error) {
     console.error('Get fabrics failed:', error);
 
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       error: 'Failed to load fabrics',
       details: error.message,
@@ -65,20 +98,27 @@ router.get('/:id', async (req, res) => {
       `
       SELECT
         id,
-        fabric_code,
+        company_id,
+        code,
         name,
-        description,
+        product_id,
+        design_no,
         gsm,
-        composition,
         width_inches,
+        composition,
+        stitch_length,
+        gauge,
+        construction,
+        unit_id,
         is_active,
         created_at,
         updated_at
-      FROM fabrics
+      FROM master.fabrics
       WHERE id = $1
+        AND company_id = $2
       LIMIT 1
       `,
-      [req.params.id]
+      [req.params.id, COMPANY_ID]
     );
 
     if (result.rows.length === 0) {
@@ -88,27 +128,13 @@ router.get('/:id', async (req, res) => {
       });
     }
 
-    const fabric = result.rows[0];
-
-    res.status(200).json({
-      id: Number(fabric.id),
-      fabric_code: fabric.fabric_code || '',
-      name: fabric.name || '',
-      description: fabric.description || '',
-      gsm: fabric.gsm == null ? null : Number(fabric.gsm),
-      composition: fabric.composition || '',
-      width_inches:
-          fabric.width_inches == null
-              ? null
-              : Number(fabric.width_inches),
-      is_active: fabric.is_active === true,
-      created_at: fabric.created_at,
-      updated_at: fabric.updated_at,
-    });
+    return res.status(200).json(
+      mapFabric(result.rows[0])
+    );
   } catch (error) {
     console.error('Get fabric failed:', error);
 
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       error: 'Failed to load fabric',
       details: error.message,
@@ -124,15 +150,20 @@ router.get('/:id', async (req, res) => {
 router.post('/', async (req, res) => {
   try {
     const {
-      fabric_code,
+      code,
       name,
-      description,
+      product_id,
+      design_no,
       gsm,
-      composition,
       width_inches,
+      composition,
+      stitch_length,
+      gauge,
+      construction,
+      unit_id,
     } = req.body;
 
-    if (!fabric_code || !fabric_code.toString().trim()) {
+    if (!code || !code.toString().trim()) {
       return res.status(400).json({
         success: false,
         error: 'Fabric code is required',
@@ -148,59 +179,79 @@ router.post('/', async (req, res) => {
 
     const result = await pool.query(
       `
-      INSERT INTO fabrics (
-        fabric_code,
+      INSERT INTO master.fabrics (
+        company_id,
+        code,
         name,
-        description,
+        product_id,
+        design_no,
         gsm,
-        composition,
         width_inches,
+        composition,
+        stitch_length,
+        gauge,
+        construction,
+        unit_id,
         is_active
       )
-      VALUES ($1, $2, $3, $4, $5, $6, TRUE)
+      VALUES (
+        $1,
+        $2,
+        $3,
+        $4,
+        $5,
+        $6,
+        $7,
+        $8,
+        $9,
+        $10,
+        $11,
+        $12,
+        TRUE
+      )
       RETURNING
         id,
-        fabric_code,
+        company_id,
+        code,
         name,
-        description,
+        product_id,
+        design_no,
         gsm,
-        composition,
         width_inches,
+        composition,
+        stitch_length,
+        gauge,
+        construction,
+        unit_id,
         is_active,
         created_at,
         updated_at
       `,
       [
-        fabric_code.toString().trim(),
+        COMPANY_ID,
+        code.toString().trim(),
         name.toString().trim(),
-        description || null,
-        gsm == null || gsm === '' ? null : Number(gsm),
+        product_id || null,
+        design_no || null,
+        gsm === '' || gsm == null
+          ? null
+          : Number(gsm),
+        width_inches === '' || width_inches == null
+          ? null
+          : Number(width_inches),
         composition || null,
-        width_inches == null || width_inches === ''
-            ? null
-            : Number(width_inches),
+        stitch_length === '' || stitch_length == null
+          ? null
+          : Number(stitch_length),
+        gauge || null,
+        construction || null,
+        unit_id || null,
       ]
     );
 
-    const fabric = result.rows[0];
-
-    res.status(201).json({
+    return res.status(201).json({
       success: true,
-      fabric: {
-        id: Number(fabric.id),
-        fabric_code: fabric.fabric_code,
-        name: fabric.name,
-        description: fabric.description || '',
-        gsm: fabric.gsm == null ? null : Number(fabric.gsm),
-        composition: fabric.composition || '',
-        width_inches:
-            fabric.width_inches == null
-                ? null
-                : Number(fabric.width_inches),
-        is_active: fabric.is_active === true,
-        created_at: fabric.created_at,
-        updated_at: fabric.updated_at,
-      },
+      fabric: mapFabric(result.rows[0]),
     });
   } catch (error) {
     console.error('Create fabric failed:', error);
@@ -212,7 +263,7 @@ router.post('/', async (req, res) => {
       });
     }
 
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       error: 'Failed to create fabric',
       details: error.message,
@@ -228,16 +279,21 @@ router.post('/', async (req, res) => {
 router.put('/:id', async (req, res) => {
   try {
     const {
-      fabric_code,
+      code,
       name,
-      description,
+      product_id,
+      design_no,
       gsm,
-      composition,
       width_inches,
+      composition,
+      stitch_length,
+      gauge,
+      construction,
+      unit_id,
       is_active,
     } = req.body;
 
-    if (!fabric_code || !fabric_code.toString().trim()) {
+    if (!code || !code.toString().trim()) {
       return res.status(400).json({
         success: false,
         error: 'Fabric code is required',
@@ -253,40 +309,62 @@ router.put('/:id', async (req, res) => {
 
     const result = await pool.query(
       `
-      UPDATE fabrics
+      UPDATE master.fabrics
       SET
-        fabric_code = $1,
+        code = $1,
         name = $2,
-        description = $3,
-        gsm = $4,
-        composition = $5,
+        product_id = $3,
+        design_no = $4,
+        gsm = $5,
         width_inches = $6,
-        is_active = $7,
+        composition = $7,
+        stitch_length = $8,
+        gauge = $9,
+        construction = $10,
+        unit_id = $11,
+        is_active = $12,
         updated_at = NOW()
-      WHERE id = $8
+      WHERE id = $13
+        AND company_id = $14
       RETURNING
         id,
-        fabric_code,
+        company_id,
+        code,
         name,
-        description,
+        product_id,
+        design_no,
         gsm,
-        composition,
         width_inches,
+        composition,
+        stitch_length,
+        gauge,
+        construction,
+        unit_id,
         is_active,
         created_at,
         updated_at
       `,
       [
-        fabric_code.toString().trim(),
+        code.toString().trim(),
         name.toString().trim(),
-        description || null,
-        gsm == null || gsm === '' ? null : Number(gsm),
+        product_id || null,
+        design_no || null,
+        gsm === '' || gsm == null
+          ? null
+          : Number(gsm),
+        width_inches === '' || width_inches == null
+          ? null
+          : Number(width_inches),
         composition || null,
-        width_inches == null || width_inches === ''
-            ? null
-            : Number(width_inches),
+        stitch_length === '' || stitch_length == null
+          ? null
+          : Number(stitch_length),
+        gauge || null,
+        construction || null,
+        unit_id || null,
         is_active !== false,
         req.params.id,
+        COMPANY_ID,
       ]
     );
 
@@ -297,25 +375,9 @@ router.put('/:id', async (req, res) => {
       });
     }
 
-    const fabric = result.rows[0];
-
-    res.status(200).json({
+    return res.status(200).json({
       success: true,
-      fabric: {
-        id: Number(fabric.id),
-        fabric_code: fabric.fabric_code,
-        name: fabric.name,
-        description: fabric.description || '',
-        gsm: fabric.gsm == null ? null : Number(fabric.gsm),
-        composition: fabric.composition || '',
-        width_inches:
-            fabric.width_inches == null
-                ? null
-                : Number(fabric.width_inches),
-        is_active: fabric.is_active === true,
-        created_at: fabric.created_at,
-        updated_at: fabric.updated_at,
-      },
+      fabric: mapFabric(result.rows[0]),
     });
   } catch (error) {
     console.error('Update fabric failed:', error);
@@ -327,7 +389,7 @@ router.put('/:id', async (req, res) => {
       });
     }
 
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       error: 'Failed to update fabric',
       details: error.message,
@@ -344,14 +406,15 @@ router.delete('/:id', async (req, res) => {
   try {
     const result = await pool.query(
       `
-      UPDATE fabrics
+      UPDATE master.fabrics
       SET
         is_active = FALSE,
         updated_at = NOW()
       WHERE id = $1
+        AND company_id = $2
       RETURNING id
       `,
-      [req.params.id]
+      [req.params.id, COMPANY_ID]
     );
 
     if (result.rows.length === 0) {
@@ -361,14 +424,14 @@ router.delete('/:id', async (req, res) => {
       });
     }
 
-    res.status(200).json({
+    return res.status(200).json({
       success: true,
       message: 'Fabric deactivated',
     });
   } catch (error) {
     console.error('Deactivate fabric failed:', error);
 
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       error: 'Failed to deactivate fabric',
       details: error.message,

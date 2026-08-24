@@ -860,7 +860,7 @@ Future<Fabric> createFabric({
       'Content-Type': 'application/json',
     },
     body: jsonEncode({
-      'fabric_code': fabricCode,
+      'code': fabricCode,
       'name': name,
       'description': description,
       'gsm': gsm,
@@ -903,7 +903,7 @@ Future<Fabric> updateFabric({
       'Content-Type': 'application/json',
     },
     body: jsonEncode({
-      'fabric_code': fabricCode,
+      'code': fabricCode,
       'name': name,
       'description': description,
       'gsm': gsm,
@@ -1138,7 +1138,7 @@ class Fabric {
     return Fabric(
       id: _toInt(json['id']),
       fabricCode:
-          json['fabric_code']?.toString() ?? '',
+          json['code']?.toString() ?? '',
       name:
           json['name']?.toString() ?? '',
       description:

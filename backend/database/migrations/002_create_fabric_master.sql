@@ -7,7 +7,7 @@
 CREATE TABLE IF NOT EXISTS fabrics (
     id BIGSERIAL PRIMARY KEY,
 
-    fabric_code VARCHAR(50) NOT NULL UNIQUE,
+    code VARCHAR(50) NOT NULL UNIQUE,
 
     name VARCHAR(255) NOT NULL,
 
@@ -31,7 +31,7 @@ CREATE TABLE IF NOT EXISTS fabrics (
 -- ============================================================
 
 CREATE INDEX IF NOT EXISTS idx_fabrics_code
-    ON fabrics(fabric_code);
+    ON fabrics(code);
 
 CREATE INDEX IF NOT EXISTS idx_fabrics_name
     ON fabrics(name);
