@@ -1404,6 +1404,18 @@ class _NewJobOrderDialogState
     });
 
     try {
+      final fabricId = int.tryParse(_selectedFabric!.id);
+
+      if (fabricId == null) {
+        if (mounted) {
+          setState(() {
+            _saving = false;
+          });
+        }
+        _showError('Selected fabric has an invalid ID.');
+        return;
+      }
+
       final jobYarns = _selectedYarns
           .map(
             (item) => JobYarnRequirement(
@@ -1416,7 +1428,7 @@ class _NewJobOrderDialogState
       final jobNumbers =
           await widget.apiService.createJob(
         partyId: _selectedParty!.id,
-        fabricId: int.parse(_selectedFabric!.id),
+        fabricId: fabricId,
         gsm: gsm,
         orderQuantity: quantity,
         machineIds: _selectedMachineIds.toList(),
