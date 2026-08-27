@@ -1416,7 +1416,7 @@ class _NewJobOrderDialogState
       final jobNumbers =
           await widget.apiService.createJob(
         partyId: _selectedParty!.id,
-        fabricId: _selectedFabric!.id,
+        fabricId: int.parse(_selectedFabric!.id),
         gsm: gsm,
         orderQuantity: quantity,
         machineIds: _selectedMachineIds.toList(),
