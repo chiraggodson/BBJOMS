@@ -276,12 +276,16 @@ class _MachinesPageState extends State<MachinesPage> {
     }).length;
   }
 
-  void _showMachineDetails(Machine machine) {
-    showDialog<void>(
-      context: context,
-      builder: (_) => _MachineDetails(machine: machine),
-    );
+  Future<void> _showMachineDetails(Machine machine) async {
+  final result = await showDialog<bool>(
+    context: context,
+    builder: (_) => _MachineDetails(machine: machine),
+  );
+
+  if (result == true && mounted) {
+    await _loadMachines();
   }
+}
 
   @override
   Widget build(BuildContext context) {
@@ -722,21 +726,54 @@ class _MachineDetails extends StatelessWidget {
               child: Row(
                 children: [
                   Expanded(
-                    child: Text(
-                      machine.machineNo,
-                      style: const TextStyle(
-                        fontSize: 20,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                  ),
-                  _Status(machine.status),
-                  IconButton(
-                    onPressed: () => Navigator.pop(context),
-                    icon: const Icon(Icons.close),
-                  ),
-                ],
-              ),
+  child: Text(
+    machine.machineNo,
+    style: const TextStyle(
+      fontSize: 20,
+      fontWeight: FontWeight.w700,
+    ),
+  ),
+),
+_Status(machine.status),
+const SizedBox(width: 8),
+OutlinedButton.icon(
+  onPressed: () async {
+    Navigator.of(context).pop();
+
+    final result = await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => AddMachinePage(
+          machine: machine,
+        ),
+      ),
+    );
+
+    if (result == true) {
+      // The parent Machines screen will refresh
+      // when the edit page returns.
+    }
+  },
+  icon: const Icon(
+    Icons.edit_outlined,
+    size: 16,
+  ),
+  label: const Text('Edit'),
+  style: OutlinedButton.styleFrom(
+    foregroundColor: _teal,
+    side: const BorderSide(color: _teal),
+    padding: const EdgeInsets.symmetric(
+      horizontal: 12,
+      vertical: 10,
+    ),
+  ),
+),
+const SizedBox(width: 4),
+IconButton(
+  onPressed: () => Navigator.pop(context),
+  icon: const Icon(Icons.close),
+),
+           ],
+            ),
             ),
             const Divider(
               height: 1,

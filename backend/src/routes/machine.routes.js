@@ -223,6 +223,165 @@ router.post("/", async (req, res) => {
 });
 
 // ============================================================
+// UPDATE MACHINE
+// PUT /api/machines/:id
+// ============================================================
+
+router.put('/:id', async (req, res) => {
+  try {
+    const {
+      machine_no,
+      status = 'idle',
+      rpm = 0,
+      counter = 0,
+      roll_size = 0,
+    } = req.body || {};
+
+    const machineId = Number(req.params.id);
+
+    if (!Number.isInteger(machineId) || machineId <= 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid machine ID',
+      });
+    }
+
+    const machineNo = String(machine_no ?? '').trim();
+
+    if (!machineNo) {
+      return res.status(400).json({
+        success: false,
+        error: 'Machine number is required',
+      });
+    }
+
+    const machineStatus =
+      String(status ?? 'idle').trim() || 'idle';
+
+    const machineRpm = Number(rpm) || 0;
+    const machineCounter = Number(counter) || 0;
+    const machineRollSize = Number(roll_size) || 0;
+
+    if (
+      machineRpm < 0 ||
+      machineCounter < 0 ||
+      machineRollSize < 0
+    ) {
+      return res.status(400).json({
+        success: false,
+        error: 'RPM, counter and roll size cannot be negative',
+      });
+    }
+
+    // Check that the machine exists.
+    const machineCheck = await pool.query(
+      `
+      SELECT id
+      FROM machines
+      WHERE id = $1
+      LIMIT 1
+      `,
+      [machineId]
+    );
+
+    if (machineCheck.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        error: 'Machine not found',
+      });
+    }
+
+    // Prevent another machine from using the same number.
+    const duplicateCheck = await pool.query(
+      `
+      SELECT id
+      FROM machines
+      WHERE machine_no = $1
+        AND id <> $2
+      LIMIT 1
+      `,
+      [machineNo, machineId]
+    );
+
+    if (duplicateCheck.rows.length > 0) {
+      return res.status(409).json({
+        success: false,
+        error: `Machine "${machineNo}" already exists`,
+      });
+    }
+
+    const result = await pool.query(
+      `
+      UPDATE machines
+      SET
+        machine_no = $1,
+        status = $2,
+        rpm = $3,
+        counter = $4,
+        roll_size = $5,
+        updated_at = CURRENT_TIMESTAMP
+      WHERE id = $6
+      RETURNING
+        id,
+        machine_no,
+        machine_type,
+        floor,
+        status,
+        rpm,
+        counter,
+        roll_size,
+        is_active,
+        created_at,
+        updated_at
+      `,
+      [
+        machineNo,
+        machineStatus,
+        machineRpm,
+        machineCounter,
+        machineRollSize,
+        machineId,
+      ]
+    );
+
+    const machine = result.rows[0];
+
+    return res.status(200).json({
+      success: true,
+      message: 'Machine updated successfully',
+      machine: {
+        ...machine,
+        id: Number(machine.id),
+        rpm: Number(machine.rpm) || 0,
+        counter: Number(machine.counter) || 0,
+        roll_size: Number(machine.roll_size) || 0,
+      },
+    });
+  } catch (error) {
+    console.error('Update machine failed:', error);
+
+    if (error.code === '23505') {
+      return res.status(409).json({
+        success: false,
+        error: 'A machine with this machine number already exists',
+      });
+    }
+
+    return res.status(500).json({
+      success: false,
+      error: 'Failed to update machine',
+      details: error.message,
+    });
+  }
+});
+
+
+
+
+
+
+
+// ============================================================
 // GET ONE MACHINE
 // GET /api/machines/:id
 // ============================================================
