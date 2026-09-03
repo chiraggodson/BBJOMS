@@ -27,7 +27,7 @@ class AddMachinePage extends StatefulWidget {
 }
 
 class _AddMachinePageState extends State<AddMachinePage> {
-  static const String _baseUrl = 'http://192.168.29.6:4000/api';
+  static const String _baseUrl = 'http://192.168.1.20:4000/api';
 
   final _formKey = GlobalKey<FormState>();
 

@@ -3,7 +3,7 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 
 class ApiService {
-  static const String baseUrl = 'http://192.168.29.6:4000/api';
+  static const String baseUrl = 'http://192.168.1.20:4000/api';
 
   // ============================================================
   // PARTIES
@@ -338,6 +338,106 @@ class ApiService {
           ),
         )
         .toList();
+  }
+
+  Future<YarnMaster> createYarn({
+    required int companyId,
+    required String code,
+    required String name,
+    String? count,
+    int? yarnTypeId,
+    String? composition,
+    String? colour,
+    int? unitId,
+    String? description,
+  }) async {
+    final response = await http.post(
+      Uri.parse('$baseUrl/yarns'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({
+        'company_id': companyId,
+        'code': code,
+        'name': name,
+        'count': count,
+        'yarn_type_id': yarnTypeId,
+        'composition': composition,
+        'colour': colour,
+        'unit_id': unitId,
+        'description': description,
+      }),
+    );
+
+    final data = _decodeMap(response.body);
+
+    if (response.statusCode != 201 || data['success'] != true) {
+      throw ApiException(
+        data['error']?.toString() ?? 'Failed to create yarn',
+        response.statusCode,
+      );
+    }
+
+    return YarnMaster.fromJson(
+      Map<String, dynamic>.from(data['yarn'] as Map),
+    );
+  }
+
+  Future<YarnMaster> updateYarn({
+    required int id,
+    required int companyId,
+    required String code,
+    required String name,
+    String? count,
+    int? yarnTypeId,
+    String? composition,
+    String? colour,
+    int? unitId,
+    String? description,
+    bool isActive = true,
+  }) async {
+    final response = await http.put(
+      Uri.parse('$baseUrl/yarns/$id'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({
+        'company_id': companyId,
+        'code': code,
+        'name': name,
+        'count': count,
+        'yarn_type_id': yarnTypeId,
+        'composition': composition,
+        'colour': colour,
+        'unit_id': unitId,
+        'description': description,
+        'is_active': isActive,
+      }),
+    );
+
+    final data = _decodeMap(response.body);
+
+    if (response.statusCode != 200 || data['success'] != true) {
+      throw ApiException(
+        data['error']?.toString() ?? 'Failed to update yarn',
+        response.statusCode,
+      );
+    }
+
+    return YarnMaster.fromJson(
+      Map<String, dynamic>.from(data['yarn'] as Map),
+    );
+  }
+
+  Future<void> deactivateYarn(int id) async {
+    final response = await http.delete(
+      Uri.parse('$baseUrl/yarns/$id'),
+    );
+
+    final data = _decodeMap(response.body);
+
+    if (response.statusCode != 200 || data['success'] != true) {
+      throw ApiException(
+        data['error']?.toString() ?? 'Failed to deactivate yarn',
+        response.statusCode,
+      );
+    }
   }
 
   // ============================================================
@@ -1208,23 +1308,53 @@ class Machine {
 
 class YarnMaster {
   final int id;
-  final String yarnName;
-  final String yarnCount;
-  final String yarnType;
+  final int? companyId;
+  final String code;
+  final String name;
+  final String count;
+  final int? yarnTypeId;
+  final String composition;
+  final String colour;
+  final int? unitId;
+  final String description;
+  final bool isActive;
 
   const YarnMaster({
     required this.id,
-    required this.yarnName,
-    required this.yarnCount,
-    required this.yarnType,
+    this.companyId,
+    required this.code,
+    required this.name,
+    required this.count,
+    this.yarnTypeId,
+    required this.composition,
+    required this.colour,
+    this.unitId,
+    required this.description,
+    required this.isActive,
   });
+
+  String get yarnName => name;
+  String get yarnCount => count;
+  String get yarnType =>
+      yarnTypeId == null ? '' : 'Type #$yarnTypeId';
 
   factory YarnMaster.fromJson(Map<String, dynamic> json) {
     return YarnMaster(
       id: _toInt(json['id']),
-      yarnName: json['yarn_name']?.toString() ?? '',
-      yarnCount: json['yarn_count']?.toString() ?? '',
-      yarnType: json['yarn_type']?.toString() ?? '',
+      companyId: _toNullableInt(json['company_id']),
+      code: json['code']?.toString() ?? '',
+      name: json['name']?.toString() ??
+          json['yarn_name']?.toString() ??
+          '',
+      count: json['count']?.toString() ??
+          json['yarn_count']?.toString() ??
+          '',
+      yarnTypeId: _toNullableInt(json['yarn_type_id']),
+      composition: json['composition']?.toString() ?? '',
+      colour: json['colour']?.toString() ?? '',
+      unitId: _toNullableInt(json['unit_id']),
+      description: json['description']?.toString() ?? '',
+      isActive: json['is_active'] != false,
     );
   }
 }
