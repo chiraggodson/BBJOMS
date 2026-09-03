@@ -70,15 +70,45 @@ class _YarnPageState extends State<YarnPage> {
     }).toList();
   }
 
+  String _nextYarnCode() {
+    var highestNumber = 0;
+
+    for (final yarn in _yarns) {
+      final match = RegExp(r'(\d+)$').firstMatch(yarn.code.trim());
+
+      if (match != null) {
+        final number = int.tryParse(match.group(1)!);
+
+        if (number != null && number > highestNumber) {
+          highestNumber = number;
+        }
+      }
+    }
+
+    return 'YRN-${(highestNumber + 1).toString().padLeft(4, '0')}';
+  }
+
+  int? get _companyId {
+    for (final yarn in _yarns) {
+      if (yarn.companyId != null && yarn.companyId! > 0) {
+        return yarn.companyId;
+      }
+    }
+
+    return null;
+  }
+
   Future<void> _openYarnForm({YarnMaster? yarn}) async {
     final saved = await showDialog<bool>(
       context: context,
-      builder: (_) => _YarnFormDialog(
-        api: _api,
-        yarn: yarn,
-        defaultCompanyId: yarn?.companyId ??
-            (_yarns.isNotEmpty ? _yarns.first.companyId : null),
-      ),
+      builder: (_) {
+        return _YarnFormDialog(
+          api: _api,
+          yarn: yarn,
+          generatedCode: yarn?.code ?? _nextYarnCode(),
+          companyId: yarn?.companyId ?? _companyId,
+        );
+      },
     );
 
     if (saved == true && mounted) {
@@ -117,7 +147,9 @@ class _YarnPageState extends State<YarnPage> {
       if (!mounted) return;
 
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Yarn deactivated')),
+        const SnackBar(
+          content: Text('Yarn deactivated'),
+        ),
       );
 
       await _loadYarns();
@@ -125,7 +157,9 @@ class _YarnPageState extends State<YarnPage> {
       if (!mounted) return;
 
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.toString())),
+        SnackBar(
+          content: Text(e.toString()),
+        ),
       );
     }
   }
@@ -169,10 +203,13 @@ class _YarnPageState extends State<YarnPage> {
                 onPressed: _loading ? null : _loadYarns,
                 icon: const Icon(Icons.refresh),
               ),
-              const SizedBox(width: 4),
+              const SizedBox(width: 8),
               FilledButton.icon(
                 onPressed: () => _openYarnForm(),
-                icon: const Icon(Icons.add, size: 18),
+                icon: const Icon(
+                  Icons.add,
+                  size: 18,
+                ),
                 label: const Text('Add Yarn'),
                 style: FilledButton.styleFrom(
                   backgroundColor: const Color(0xFF00BFA6),
@@ -186,7 +223,9 @@ class _YarnPageState extends State<YarnPage> {
             ],
           ),
           const SizedBox(height: 24),
-          _YarnSummary(count: _yarns.length),
+          _YarnSummary(
+            count: _yarns.length,
+          ),
           const SizedBox(height: 20),
           _DashboardCard(
             title: 'Yarn Master',
@@ -198,8 +237,11 @@ class _YarnPageState extends State<YarnPage> {
                   onChanged: (_) => setState(() {}),
                   decoration: InputDecoration(
                     hintText:
-                        'Search code, yarn, count, composition or colour...',
-                    prefixIcon: const Icon(Icons.search, size: 20),
+                        'Search yarn number, name, count, composition or colour...',
+                    prefixIcon: const Icon(
+                      Icons.search,
+                      size: 20,
+                    ),
                     suffixIcon: _searchController.text.isEmpty
                         ? null
                         : IconButton(
@@ -207,7 +249,10 @@ class _YarnPageState extends State<YarnPage> {
                               _searchController.clear();
                               setState(() {});
                             },
-                            icon: const Icon(Icons.clear, size: 18),
+                            icon: const Icon(
+                              Icons.clear,
+                              size: 18,
+                            ),
                           ),
                     filled: true,
                     fillColor: const Color(0xFF0F171E),
@@ -234,7 +279,7 @@ class _YarnPageState extends State<YarnPage> {
                 const SizedBox(height: 18),
                 if (_loading)
                   const Padding(
-                    padding: EdgeInsets.all(40),
+                    padding: EdgeInsets.all(45),
                     child: CircularProgressIndicator(),
                   )
                 else if (_error != null)
@@ -244,7 +289,7 @@ class _YarnPageState extends State<YarnPage> {
                   )
                 else if (yarns.isEmpty)
                   const Padding(
-                    padding: EdgeInsets.all(40),
+                    padding: EdgeInsets.all(45),
                     child: Column(
                       children: [
                         Icon(
@@ -276,10 +321,11 @@ class _YarnPageState extends State<YarnPage> {
           const _DashboardCard(
             title: 'Recent Yarn Movements',
             child: Padding(
-              padding: EdgeInsets.symmetric(vertical: 18),
+              padding: EdgeInsets.symmetric(
+                vertical: 18,
+              ),
               child: Text(
-                'Yarn movement transactions will be connected next. '
-                'Yarn Master data above is live from the database.',
+                'Yarn movement and stock transactions will be connected here after Yarn Master.',
                 style: TextStyle(
                   color: Color(0xFF71808D),
                   fontSize: 12,
@@ -296,55 +342,69 @@ class _YarnPageState extends State<YarnPage> {
 class _YarnSummary extends StatelessWidget {
   final int count;
 
-  const _YarnSummary({required this.count});
+  const _YarnSummary({
+    required this.count,
+  });
 
   @override
   Widget build(BuildContext context) {
     final cards = [
-      ('Active Yarn Masters', '$count', Icons.all_inclusive),
-      ('Stock', '—', Icons.inventory_2_outlined),
-      ('Active Lots', '—', Icons.layers_outlined),
-      ('Today\'s Movements', '—', Icons.swap_vert),
+      (
+        'Active Yarn Masters',
+        '$count',
+        Icons.all_inclusive,
+      ),
+      (
+        'Total Stock',
+        '—',
+        Icons.inventory_2_outlined,
+      ),
+      (
+        'Active Lots',
+        '—',
+        Icons.layers_outlined,
+      ),
+      (
+        'Today\'s Movements',
+        '—',
+        Icons.swap_vert,
+      ),
     ];
 
     return LayoutBuilder(
       builder: (context, constraints) {
-        final children = cards
-            .map(
-              (card) => _YarnStatCard(
-                title: card.$1,
-                value: card.$2,
-                icon: card.$3,
-              ),
-            )
-            .toList();
-
         if (constraints.maxWidth < 760) {
           return Wrap(
             spacing: 12,
             runSpacing: 12,
-            children: children
-                .map(
-                  (child) => SizedBox(
-                    width: (constraints.maxWidth - 12) / 2,
-                    child: child,
-                  ),
-                )
-                .toList(),
+            children: cards.map((card) {
+              return SizedBox(
+                width: (constraints.maxWidth - 12) / 2,
+                child: _YarnStatCard(
+                  title: card.$1,
+                  value: card.$2,
+                  icon: card.$3,
+                ),
+              );
+            }).toList(),
           );
         }
 
         return Row(
-          children: children
-              .map(
-                (child) => Expanded(
-                  child: Padding(
-                    padding: const EdgeInsets.only(right: 12),
-                    child: child,
-                  ),
+          children: cards.map((card) {
+            return Expanded(
+              child: Padding(
+                padding: const EdgeInsets.only(
+                  right: 12,
                 ),
-              )
-              .toList(),
+                child: _YarnStatCard(
+                  title: card.$1,
+                  value: card.$2,
+                  icon: card.$3,
+                ),
+              ),
+            );
+          }).toList(),
         );
       },
     );
@@ -369,7 +429,9 @@ class _YarnStatCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: const Color(0xFF111A22),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFF1E2A34)),
+        border: Border.all(
+          color: const Color(0xFF1E2A34),
+        ),
       ),
       child: Row(
         children: [
@@ -377,12 +439,15 @@ class _YarnStatCard extends StatelessWidget {
             width: 42,
             height: 42,
             decoration: BoxDecoration(
-              color: const Color(0xFF00BFA6).withValues(alpha: 0.12),
+              color: const Color(0xFF00BFA6).withValues(
+                alpha: 0.12,
+              ),
               borderRadius: BorderRadius.circular(10),
             ),
             child: Icon(
               icon,
               color: const Color(0xFF00BFA6),
+              size: 21,
             ),
           ),
           const SizedBox(width: 12),
@@ -434,10 +499,14 @@ class _YarnTable extends StatelessWidget {
           return Column(
             children: yarns.map((yarn) {
               return Container(
-                padding: const EdgeInsets.symmetric(vertical: 12),
+                padding: const EdgeInsets.symmetric(
+                  vertical: 14,
+                ),
                 decoration: const BoxDecoration(
                   border: Border(
-                    bottom: BorderSide(color: Color(0xFF1D2933)),
+                    bottom: BorderSide(
+                      color: Color(0xFF1D2933),
+                    ),
                   ),
                 ),
                 child: Row(
@@ -454,7 +523,8 @@ class _YarnTable extends StatelessWidget {
                     const SizedBox(width: 12),
                     Expanded(
                       child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
+                        crossAxisAlignment:
+                            CrossAxisAlignment.start,
                         children: [
                           Text(
                             yarn.name,
@@ -465,8 +535,7 @@ class _YarnTable extends StatelessWidget {
                           ),
                           const SizedBox(height: 4),
                           Text(
-                            '${yarn.code} • '
-                            '${yarn.count.isEmpty ? 'No count' : yarn.count}',
+                            '${yarn.code} • ${yarn.count.isEmpty ? 'No count' : yarn.count}',
                             style: const TextStyle(
                               color: Color(0xFF71808D),
                               fontSize: 11,
@@ -483,7 +552,7 @@ class _YarnTable extends StatelessWidget {
                           onDeactivate(yarn);
                         }
                       },
-                      itemBuilder: (context) => const [
+                      itemBuilder: (_) => const [
                         PopupMenuItem(
                           value: 'edit',
                           child: Text('Edit'),
@@ -517,7 +586,7 @@ class _YarnTable extends StatelessWidget {
                   Expanded(
                     flex: 2,
                     child: Text(
-                      'Code',
+                      'Yarn No.',
                       style: _TableHeaderStyle.style,
                     ),
                   ),
@@ -554,67 +623,106 @@ class _YarnTable extends StatelessWidget {
               ),
             ),
             ...yarns.map(
-              (yarn) => Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 14,
-                  vertical: 14,
-                ),
-                decoration: const BoxDecoration(
-                  border: Border(
-                    bottom: BorderSide(color: Color(0xFF1D2933)),
+              (yarn) {
+                return Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 14,
                   ),
-                ),
-                child: Row(
-                  children: [
-                    _TableCell(
-                      text: yarn.code,
-                      flex: 2,
-                    ),
-                    Expanded(
-                      flex: 4,
-                      child: Text(
-                        yarn.name,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          fontWeight: FontWeight.w600,
-                          fontSize: 12,
-                        ),
+                  decoration: const BoxDecoration(
+                    border: Border(
+                      bottom: BorderSide(
+                        color: Color(0xFF1D2933),
                       ),
                     ),
-                    _TableCell(
-                      text: yarn.count,
-                      flex: 2,
-                    ),
-                    _TableCell(
-                      text: yarn.composition,
-                      flex: 3,
-                    ),
-                    _TableCell(
-                      text: yarn.colour,
-                      flex: 2,
-                    ),
-                    PopupMenuButton<String>(
-                      onSelected: (value) {
-                        if (value == 'edit') {
-                          onEdit(yarn);
-                        } else if (value == 'deactivate') {
-                          onDeactivate(yarn);
-                        }
-                      },
-                      itemBuilder: (context) => const [
-                        PopupMenuItem(
-                          value: 'edit',
-                          child: Text('Edit'),
+                  ),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        flex: 2,
+                        child: Text(
+                          yarn.code.isEmpty ? '—' : yarn.code,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: Color(0xFF9BA7B2),
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                          ),
                         ),
-                        PopupMenuItem(
-                          value: 'deactivate',
-                          child: Text('Deactivate'),
+                      ),
+                      Expanded(
+                        flex: 4,
+                        child: Text(
+                          yarn.name,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            fontWeight: FontWeight.w600,
+                            fontSize: 12,
+                          ),
                         ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
+                      ),
+                      Expanded(
+                        flex: 2,
+                        child: Text(
+                          yarn.count.isEmpty
+                              ? '—'
+                              : yarn.count,
+                          style: const TextStyle(
+                            color: Color(0xFF9BA7B2),
+                            fontSize: 12,
+                          ),
+                        ),
+                      ),
+                      Expanded(
+                        flex: 3,
+                        child: Text(
+                          yarn.composition.isEmpty
+                              ? '—'
+                              : yarn.composition,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: Color(0xFF9BA7B2),
+                            fontSize: 12,
+                          ),
+                        ),
+                      ),
+                      Expanded(
+                        flex: 2,
+                        child: Text(
+                          yarn.colour.isEmpty
+                              ? '—'
+                              : yarn.colour,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: Color(0xFF9BA7B2),
+                            fontSize: 12,
+                          ),
+                        ),
+                      ),
+                      PopupMenuButton<String>(
+                        onSelected: (value) {
+                          if (value == 'edit') {
+                            onEdit(yarn);
+                          } else if (value ==
+                              'deactivate') {
+                            onDeactivate(yarn);
+                          }
+                        },
+                        itemBuilder: (_) => const [
+                          PopupMenuItem(
+                            value: 'edit',
+                            child: Text('Edit'),
+                          ),
+                          PopupMenuItem(
+                            value: 'deactivate',
+                            child: Text('Deactivate'),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                );
+              },
             ),
           ],
         );
@@ -623,40 +731,17 @@ class _YarnTable extends StatelessWidget {
   }
 }
 
-class _TableCell extends StatelessWidget {
-  final String text;
-  final int flex;
-
-  const _TableCell({
-    required this.text,
-    required this.flex,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Expanded(
-      flex: flex,
-      child: Text(
-        text.isEmpty ? '—' : text,
-        overflow: TextOverflow.ellipsis,
-        style: const TextStyle(
-          color: Color(0xFF9BA7B2),
-          fontSize: 12,
-        ),
-      ),
-    );
-  }
-}
-
 class _YarnFormDialog extends StatefulWidget {
   final ApiService api;
   final YarnMaster? yarn;
-  final int? defaultCompanyId;
+  final String generatedCode;
+  final int? companyId;
 
   const _YarnFormDialog({
     required this.api,
     required this.yarn,
-    required this.defaultCompanyId,
+    required this.generatedCode,
+    required this.companyId,
   });
 
   @override
@@ -664,16 +749,13 @@ class _YarnFormDialog extends StatefulWidget {
 }
 
 class _YarnFormDialogState extends State<_YarnFormDialog> {
-  final _formKey = GlobalKey<FormState>();
+  final GlobalKey<FormState> _formKey =
+      GlobalKey<FormState>();
 
-  late final TextEditingController _companyController;
-  late final TextEditingController _codeController;
   late final TextEditingController _nameController;
   late final TextEditingController _countController;
-  late final TextEditingController _typeController;
   late final TextEditingController _compositionController;
   late final TextEditingController _colourController;
-  late final TextEditingController _unitController;
   late final TextEditingController _descriptionController;
 
   bool _saving = false;
@@ -686,21 +768,17 @@ class _YarnFormDialogState extends State<_YarnFormDialog> {
 
     final yarn = widget.yarn;
 
-    _companyController = TextEditingController(
-      text: (yarn?.companyId ?? widget.defaultCompanyId)?.toString() ?? '',
+    _nameController = TextEditingController(
+      text: yarn?.name ?? '',
     );
-    _codeController = TextEditingController(text: yarn?.code ?? '');
-    _nameController = TextEditingController(text: yarn?.name ?? '');
-    _countController = TextEditingController(text: yarn?.count ?? '');
-    _typeController = TextEditingController(
-      text: yarn?.yarnTypeId?.toString() ?? '',
+    _countController = TextEditingController(
+      text: yarn?.count ?? '',
     );
     _compositionController = TextEditingController(
       text: yarn?.composition ?? '',
     );
-    _colourController = TextEditingController(text: yarn?.colour ?? '');
-    _unitController = TextEditingController(
-      text: yarn?.unitId?.toString() ?? '',
+    _colourController = TextEditingController(
+      text: yarn?.colour ?? '',
     );
     _descriptionController = TextEditingController(
       text: yarn?.description ?? '',
@@ -709,19 +787,18 @@ class _YarnFormDialogState extends State<_YarnFormDialog> {
 
   @override
   void dispose() {
-    _companyController.dispose();
-    _codeController.dispose();
     _nameController.dispose();
     _countController.dispose();
-    _typeController.dispose();
     _compositionController.dispose();
     _colourController.dispose();
-    _unitController.dispose();
     _descriptionController.dispose();
     super.dispose();
   }
 
-  InputDecoration _decoration(String label, {String? hint}) {
+  InputDecoration _decoration(
+    String label, {
+    String? hint,
+  }) {
     return InputDecoration(
       labelText: label,
       hintText: hint,
@@ -729,33 +806,37 @@ class _YarnFormDialogState extends State<_YarnFormDialog> {
       fillColor: const Color(0xFF0F171E),
       border: OutlineInputBorder(
         borderRadius: BorderRadius.circular(8),
-        borderSide: const BorderSide(color: Color(0xFF25313B)),
+        borderSide: const BorderSide(
+          color: Color(0xFF25313B),
+        ),
       ),
       enabledBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(8),
-        borderSide: const BorderSide(color: Color(0xFF25313B)),
+        borderSide: const BorderSide(
+          color: Color(0xFF25313B),
+        ),
       ),
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(8),
-        borderSide: const BorderSide(color: Color(0xFF00BFA6)),
+        borderSide: const BorderSide(
+          color: Color(0xFF00BFA6),
+        ),
       ),
     );
   }
 
   Future<void> _save() async {
-    if (!_formKey.currentState!.validate()) return;
+    if (!_formKey.currentState!.validate()) {
+      return;
+    }
 
-    final companyId = int.tryParse(_companyController.text.trim());
-    final yarnTypeId = _typeController.text.trim().isEmpty
-        ? null
-        : int.tryParse(_typeController.text.trim());
-    final unitId = _unitController.text.trim().isEmpty
-        ? null
-        : int.tryParse(_unitController.text.trim());
-
-    if (companyId == null || companyId <= 0) {
+    if (widget.companyId == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Enter a valid Company ID')),
+        const SnackBar(
+          content: Text(
+            'No company is available for this Yarn.',
+          ),
+        ),
       );
       return;
     }
@@ -765,35 +846,43 @@ class _YarnFormDialogState extends State<_YarnFormDialog> {
     });
 
     try {
-      final count = _optional(_countController.text);
-      final composition = _optional(_compositionController.text);
-      final colour = _optional(_colourController.text);
-      final description = _optional(_descriptionController.text);
+      final code = widget.generatedCode.trim();
+      final name = _nameController.text.trim();
+      final count = _countController.text.trim();
+      final composition =
+          _compositionController.text.trim();
+      final colour = _colourController.text.trim();
+      final description =
+          _descriptionController.text.trim();
 
       if (_editing) {
         await widget.api.updateYarn(
           id: widget.yarn!.id,
-          companyId: companyId,
-          code: _codeController.text.trim(),
-          name: _nameController.text.trim(),
-          count: count,
-          yarnTypeId: yarnTypeId,
-          composition: composition,
-          colour: colour,
-          unitId: unitId,
-          description: description,
+          companyId: widget.companyId!,
+          code: code,
+          name: name,
+          count: count.isEmpty ? null : count,
+          yarnTypeId: widget.yarn!.yarnTypeId,
+          composition:
+              composition.isEmpty ? null : composition,
+          colour: colour.isEmpty ? null : colour,
+          unitId: widget.yarn!.unitId,
+          description:
+              description.isEmpty ? null : description,
         );
       } else {
         await widget.api.createYarn(
-          companyId: companyId,
-          code: _codeController.text.trim(),
-          name: _nameController.text.trim(),
-          count: count,
-          yarnTypeId: yarnTypeId,
-          composition: composition,
-          colour: colour,
-          unitId: unitId,
-          description: description,
+          companyId: widget.companyId!,
+          code: code,
+          name: name,
+          count: count.isEmpty ? null : count,
+          yarnTypeId: null,
+          composition:
+              composition.isEmpty ? null : composition,
+          colour: colour.isEmpty ? null : colour,
+          unitId: null,
+          description:
+              description.isEmpty ? null : description,
         );
       }
 
@@ -808,14 +897,11 @@ class _YarnFormDialogState extends State<_YarnFormDialog> {
       });
 
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.toString())),
+        SnackBar(
+          content: Text(e.toString()),
+        ),
       );
     }
-  }
-
-  String? _optional(String value) {
-    final trimmed = value.trim();
-    return trimmed.isEmpty ? null : trimmed;
   }
 
   @override
@@ -831,21 +917,45 @@ class _YarnFormDialogState extends State<_YarnFormDialog> {
         child: Column(
           children: [
             Padding(
-              padding: const EdgeInsets.fromLTRB(24, 20, 16, 18),
+              padding: const EdgeInsets.fromLTRB(
+                24,
+                20,
+                16,
+                18,
+              ),
               child: Row(
                 children: [
                   Expanded(
-                    child: Text(
-                      _editing ? 'Edit Yarn' : 'Add Yarn',
-                      style: const TextStyle(
-                        fontSize: 20,
-                        fontWeight: FontWeight.w700,
-                      ),
+                    child: Column(
+                      crossAxisAlignment:
+                          CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          _editing
+                              ? 'Edit Yarn'
+                              : 'Add Yarn',
+                          style: const TextStyle(
+                            fontSize: 20,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          _editing
+                              ? 'Update yarn master details'
+                              : 'Create a new yarn master',
+                          style: const TextStyle(
+                            color: Color(0xFF71808D),
+                            fontSize: 11,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                   IconButton(
-                    onPressed:
-                        _saving ? null : () => Navigator.pop(context),
+                    onPressed: _saving
+                        ? null
+                        : () => Navigator.pop(context),
                     icon: const Icon(Icons.close),
                   ),
                 ],
@@ -862,105 +972,94 @@ class _YarnFormDialogState extends State<_YarnFormDialog> {
                   padding: const EdgeInsets.all(24),
                   child: LayoutBuilder(
                     builder: (context, constraints) {
-                      final twoColumns = constraints.maxWidth > 560;
+                      final twoColumns =
+                          constraints.maxWidth > 560;
+
                       final width = twoColumns
                           ? (constraints.maxWidth - 14) / 2
                           : constraints.maxWidth;
+
+                      Widget field(Widget child) {
+                        return SizedBox(
+                          width: width,
+                          child: child,
+                        );
+                      }
 
                       return Wrap(
                         spacing: 14,
                         runSpacing: 14,
                         children: [
-                          SizedBox(
-                            width: width,
-                            child: TextFormField(
-                              controller: _companyController,
-                              keyboardType: TextInputType.number,
-                              decoration: _decoration('Company ID'),
-                              validator: (value) {
-                                if (int.tryParse(value?.trim() ?? '') ==
-                                    null) {
-                                  return 'Required';
-                                }
-                                return null;
-                              },
+                          field(
+                            TextFormField(
+                              initialValue:
+                                  widget.generatedCode,
+                              readOnly: true,
+                              decoration:
+                                  _decoration('Yarn No.').copyWith(
+                                suffixIcon: const Icon(
+                                  Icons.lock_outline,
+                                  size: 18,
+                                ),
+                              ),
                             ),
                           ),
-                          SizedBox(
-                            width: width,
-                            child: TextFormField(
-                              controller: _codeController,
-                              decoration: _decoration('Yarn Code'),
-                              validator: (value) {
-                                if (value == null || value.trim().isEmpty) {
-                                  return 'Yarn code is required';
-                                }
-                                return null;
-                              },
-                            ),
-                          ),
-                          SizedBox(
-                            width: width,
-                            child: TextFormField(
+                          field(
+                            TextFormField(
                               controller: _nameController,
-                              decoration: _decoration('Yarn Name'),
+                              decoration: _decoration(
+                                'Yarn Name',
+                                hint:
+                                    'e.g. Polyester 75D',
+                              ),
                               validator: (value) {
-                                if (value == null || value.trim().isEmpty) {
+                                if (value == null ||
+                                    value.trim().isEmpty) {
                                   return 'Yarn name is required';
                                 }
+
                                 return null;
                               },
                             ),
                           ),
-                          SizedBox(
-                            width: width,
-                            child: TextFormField(
+                          field(
+                            TextFormField(
                               controller: _countController,
                               decoration: _decoration(
                                 'Count',
-                                hint: '75D / 30s',
+                                hint: 'e.g. 75D / 30s',
                               ),
                             ),
                           ),
-                          SizedBox(
-                            width: width,
-                            child: TextFormField(
-                              controller: _typeController,
-                              keyboardType: TextInputType.number,
-                              decoration: _decoration('Yarn Type ID'),
-                            ),
-                          ),
-                          SizedBox(
-                            width: width,
-                            child: TextFormField(
-                              controller: _unitController,
-                              keyboardType: TextInputType.number,
-                              decoration: _decoration('Unit ID'),
-                            ),
-                          ),
-                          SizedBox(
-                            width: width,
-                            child: TextFormField(
-                              controller: _compositionController,
+                          field(
+                            TextFormField(
+                              controller:
+                                  _compositionController,
                               decoration: _decoration(
                                 'Composition',
-                                hint: '100% Polyester',
+                                hint:
+                                    'e.g. 100% Polyester',
                               ),
                             ),
                           ),
-                          SizedBox(
-                            width: width,
-                            child: TextFormField(
-                              controller: _colourController,
-                              decoration: _decoration('Colour'),
+                          field(
+                            TextFormField(
+                              controller:
+                                  _colourController,
+                              decoration: _decoration(
+                                'Colour',
+                                hint: 'e.g. Raw White',
+                              ),
                             ),
                           ),
                           SizedBox(
                             width: constraints.maxWidth,
                             child: TextFormField(
-                              controller: _descriptionController,
+                              controller:
+                                  _descriptionController,
                               maxLines: 3,
-                              decoration: _decoration('Description'),
+                              decoration:
+                                  _decoration('Description'),
                             ),
                           ),
                         ],
@@ -977,18 +1076,21 @@ class _YarnFormDialogState extends State<_YarnFormDialog> {
             Padding(
               padding: const EdgeInsets.all(16),
               child: Row(
-                mainAxisAlignment: MainAxisAlignment.end,
+                mainAxisAlignment:
+                    MainAxisAlignment.end,
                 children: [
                   TextButton(
-                    onPressed:
-                        _saving ? null : () => Navigator.pop(context),
+                    onPressed: _saving
+                        ? null
+                        : () => Navigator.pop(context),
                     child: const Text('Cancel'),
                   ),
                   const SizedBox(width: 10),
                   FilledButton(
                     onPressed: _saving ? null : _save,
                     style: FilledButton.styleFrom(
-                      backgroundColor: const Color(0xFF00BFA6),
+                      backgroundColor:
+                          const Color(0xFF00BFA6),
                       foregroundColor: Colors.white,
                       padding: const EdgeInsets.symmetric(
                         horizontal: 20,
@@ -999,12 +1101,15 @@ class _YarnFormDialogState extends State<_YarnFormDialog> {
                         ? const SizedBox(
                             width: 18,
                             height: 18,
-                            child: CircularProgressIndicator(
+                            child:
+                                CircularProgressIndicator(
                               strokeWidth: 2,
                             ),
                           )
                         : Text(
-                            _editing ? 'Save Changes' : 'Add Yarn',
+                            _editing
+                                ? 'Save Changes'
+                                : 'Add Yarn',
                           ),
                   ),
                 ],
@@ -1038,7 +1143,9 @@ class _ErrorState extends StatelessWidget {
             color: Color(0xFF71808D),
           ),
           const SizedBox(height: 12),
-          const Text('Could not load Yarn Master'),
+          const Text(
+            'Could not load Yarn Master',
+          ),
           const SizedBox(height: 7),
           Text(
             message,
@@ -1051,7 +1158,10 @@ class _ErrorState extends StatelessWidget {
           const SizedBox(height: 14),
           OutlinedButton.icon(
             onPressed: onRetry,
-            icon: const Icon(Icons.refresh, size: 17),
+            icon: const Icon(
+              Icons.refresh,
+              size: 17,
+            ),
             label: const Text('Retry'),
           ),
         ],
@@ -1081,7 +1191,8 @@ class _DashboardCard extends StatelessWidget {
         ),
       ),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment:
+            CrossAxisAlignment.start,
         children: [
           Text(
             title,
