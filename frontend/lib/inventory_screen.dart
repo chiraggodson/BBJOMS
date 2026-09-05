@@ -1,5 +1,6 @@
 
 import 'package:flutter/material.dart';
+import 'yarn_receipt_screen.dart';
 
 const _bg = Color(0xFF0B1117);
 const _panel = Color(0xFF111A22);
@@ -98,7 +99,22 @@ class InventoryPage extends StatelessWidget {
     ('Yarn','Spandex 40D','238 kg','Low Stock'),
   ];
   @override Widget build(BuildContext context)=>SingleChildScrollView(padding:const EdgeInsets.all(28),child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
-    Row(children:[const Expanded(child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[Text('Inventory',style:TextStyle(fontSize:28,fontWeight:FontWeight.w700)),SizedBox(height:5),Text('Yarn, fabric and stock movement overview',style:TextStyle(color:_muted,fontSize:13))])),_primary('Stock Adjustment',Icons.tune,()=>())]),
+    Row(children:[const Expanded(child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[Text('Inventory',style:TextStyle(fontSize:28,fontWeight:FontWeight.w700)),SizedBox(height:5),Text('Yarn, fabric and stock movement overview',style:TextStyle(color:_muted,fontSize:13))])),Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        _primary(
+          'Receive Yarn',
+          Icons.south_west,
+          () => Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (_) => const YarnReceiptScreen(),
+            ),
+          ),
+        ),
+        const SizedBox(width: 10),
+        _primary('Stock Adjustment', Icons.tune, () {}),
+      ],
+    )]),
     const SizedBox(height:24),
     LayoutBuilder(builder:(_,c)=>c.maxWidth<760?const Wrap(spacing:12,runSpacing:12,children:[_Stat('Yarn Stock','5,480 kg',Icons.all_inclusive),_Stat('Fabric Stock','4,760 kg',Icons.layers_outlined),_Stat('Receipts Today','730 kg',Icons.south_west),_Stat('Issues Today','410 kg',Icons.north_east)]):const Row(children:[Expanded(child:_Stat('Yarn Stock','5,480 kg',Icons.all_inclusive)),SizedBox(width:12),Expanded(child:_Stat('Fabric Stock','4,760 kg',Icons.layers_outlined)),SizedBox(width:12),Expanded(child:_Stat('Receipts Today','730 kg',Icons.south_west)),SizedBox(width:12),Expanded(child:_Stat('Issues Today','410 kg',Icons.north_east))])),
     const SizedBox(height:20),

@@ -8,6 +8,7 @@ const jobRoutes = require('./routes/job.routes');
 const fabricRoutes = require('./routes/fabric.routes');
 const machineRoutes = require('./routes/machine.routes');
 const yarnRoutes = require('./routes/yarn.routes');
+const yarnReceiptRoutes = require('./routes/yarn_receipt.routes');
 
 app.use(cors());
 app.use(express.json());
@@ -50,5 +51,6 @@ app.use('/api/jobs', jobRoutes);
 app.use('/api/fabrics', fabricRoutes);
 app.use('/api/machines', machineRoutes);
 app.use('/api/yarns', yarnRoutes);
+app.use('/api/yarn-receipts', yarnReceiptRoutes);
 
 module.exports = app;
