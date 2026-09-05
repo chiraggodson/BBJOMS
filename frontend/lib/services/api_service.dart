@@ -341,7 +341,6 @@ class ApiService {
   }
 
   Future<YarnMaster> createYarn({
-    required int companyId,
     required String code,
     required String name,
     String? count,
@@ -355,7 +354,6 @@ class ApiService {
       Uri.parse('$baseUrl/yarns'),
       headers: {'Content-Type': 'application/json'},
       body: jsonEncode({
-        'company_id': companyId,
         'code': code,
         'name': name,
         'count': count,
@@ -382,8 +380,7 @@ class ApiService {
   }
 
   Future<YarnMaster> updateYarn({
-    required int id,
-    required int companyId,
+    required String id,
     required String code,
     required String name,
     String? count,
@@ -398,7 +395,6 @@ class ApiService {
       Uri.parse('$baseUrl/yarns/$id'),
       headers: {'Content-Type': 'application/json'},
       body: jsonEncode({
-        'company_id': companyId,
         'code': code,
         'name': name,
         'count': count,
@@ -425,7 +421,7 @@ class ApiService {
     );
   }
 
-  Future<void> deactivateYarn(int id) async {
+  Future<void> deactivateYarn(String id) async {
     final response = await http.delete(
       Uri.parse('$baseUrl/yarns/$id'),
     );
@@ -645,7 +641,7 @@ class ApiService {
 
   Future<List<String>> createJob({
     required int partyId,
-    required int fabricId,
+    required String fabricName,
     required double gsm,
     required double orderQuantity,
     required List<int> machineIds,
@@ -662,15 +658,16 @@ class ApiService {
 
     final body = <String, dynamic>{
       'party_id': partyId,
-      'fabric_id': fabricId,
+      'fabric_name': fabricName,
       'gsm': gsm,
       'order_quantity': orderQuantity,
       'machine_ids': machineIds,
       'yarns': yarns
           .map(
             (yarn) => {
-              'yarn_id': yarn.yarnId,
-              'quantity': yarn.quantity,
+              'yarn_name': yarn.yarnName,
+              'yarn_count': yarn.yarnCount,
+              'required_kg': yarn.quantity,
             },
           )
           .toList(),
@@ -708,22 +705,27 @@ class ApiService {
 
     final jobs = data['jobs'];
 
-    if (jobs is! List) {
-      throw ApiException(
-        data['error']?.toString() ??
-            'Job was created but no job numbers were returned',
-        response.statusCode,
-      );
+    if (jobs is List) {
+      return jobs
+          .map((job) {
+            if (job is Map && (job['job_no'] != null || job['jobNo'] != null)) {
+              return (job['job_no'] ?? job['jobNo']).toString();
+            }
+            return job.toString();
+          })
+          .toList();
     }
 
-    return jobs
-        .map((job) {
-          if (job is Map && job['job_no'] != null) {
-            return job['job_no'].toString();
-          }
-          return job.toString();
-        })
-        .toList();
+    final job = data['job'];
+    if (job is Map && (job['job_no'] != null || job['jobNo'] != null)) {
+      return [(job['job_no'] ?? job['jobNo']).toString()];
+    }
+
+    throw ApiException(
+      data['error']?.toString() ??
+          'Job was created but no job number was returned',
+      response.statusCode,
+    );
   }
 
   // ============================================================
@@ -733,7 +735,7 @@ class ApiService {
   Future<JobOrder> updateJob({
     required int id,
     required int partyId,
-    required int fabricId,
+    required String fabricName,
     required double gsm,
     required double orderQuantity,
     List<int> machineIds = const [],
@@ -743,15 +745,16 @@ class ApiService {
 
     final body = <String, dynamic>{
       'party_id': partyId,
-      'fabric_id': fabricId,
+      'fabric_name': fabricName,
       'gsm': gsm,
       'order_quantity': orderQuantity,
       'machine_ids': machineIds,
       'yarns': yarns
           .map(
             (yarn) => {
-              'yarn_id': yarn.yarnId,
-              'quantity': yarn.quantity,
+              'yarn_name': yarn.yarnName,
+              'yarn_count': yarn.yarnCount,
+              'required_kg': yarn.quantity,
             },
           )
           .toList(),
@@ -1307,8 +1310,7 @@ class Machine {
 // ============================================================
 
 class YarnMaster {
-  final int id;
-  final int? companyId;
+  final String id;
   final String code;
   final String name;
   final String count;
@@ -1321,7 +1323,6 @@ class YarnMaster {
 
   const YarnMaster({
     required this.id,
-    this.companyId,
     required this.code,
     required this.name,
     required this.count,
@@ -1340,8 +1341,7 @@ class YarnMaster {
 
   factory YarnMaster.fromJson(Map<String, dynamic> json) {
     return YarnMaster(
-      id: _toInt(json['id']),
-      companyId: _toNullableInt(json['company_id']),
+      id: json['id']?.toString() ?? '',
       code: json['code']?.toString() ?? '',
       name: json['name']?.toString() ??
           json['yarn_name']?.toString() ??
@@ -1364,11 +1364,15 @@ class YarnMaster {
 // ============================================================
 
 class JobYarnRequirement {
-  final int yarnId;
+  final String yarnId;
+  final String yarnName;
+  final String yarnCount;
   final double? quantity;
 
   const JobYarnRequirement({
     required this.yarnId,
+    required this.yarnName,
+    required this.yarnCount,
     this.quantity,
   });
 }
@@ -1417,32 +1421,27 @@ class JobOrder {
   factory JobOrder.fromJson(Map<String, dynamic> json) {
     return JobOrder(
       id: _toInt(json['id']),
-      jobNo: json['job_no']?.toString() ?? '',
-      fabricId: _toNullableInt(json['fabric_id']),
-      fabricName: json['fabric_name']?.toString() ?? '',
-      partyId: _toNullableInt(json['party_id']),
-      partyName: json['party_name']?.toString() ?? '',
-      machineId: _toNullableInt(json['machine_id']),
-      machineNo: json['machine_no']?.toString() ?? '',
+      jobNo: (json['jobNo'] ?? json['job_no'])?.toString() ?? '',
+      fabricId: _toNullableInt(json['fabricId'] ?? json['fabric_id']),
+      fabricName: (json['fabricName'] ?? json['fabric_name'])?.toString() ?? '',
+      partyId: _toNullableInt(json['partyId'] ?? json['party_id']),
+      partyName: (json['partyName'] ?? json['party_name'])?.toString() ?? '',
+      machineId: _toNullableInt(json['machineId'] ?? json['machine_id']),
+      machineNo: (json['machineNo'] ?? json['machine_no'] ?? json['machineNumbers'])?.toString() ?? '',
       gsm: _toDouble(json['gsm']),
-      orderQuantity: _toDouble(json['order_quantity']),
-      status: json['status']?.toString() ?? '',
-      createdAt: json['created_at']?.toString() ?? '',
-      yarnsUsed: json['yarns_used']?.toString() ?? '',
-      actualProduction: _toDouble(json['actual_production']),
-      avgRollSize: _toDouble(json['avg_roll_size']),
-      remainingQuantity: _toDouble(json['remaining_quantity']),
+      orderQuantity: _toDouble(json['orderQuantity'] ?? json['order_quantity']),
+      status: (json['status'] ?? '').toString(),
+      createdAt: (json['createdAt'] ?? json['created_at'])?.toString() ?? '',
+      yarnsUsed: (json['yarnsUsed'] ?? json['yarns_used'])?.toString() ?? '',
+      actualProduction: _toDouble(json['actualProduction'] ?? json['producedQuantity'] ?? json['actual_production'] ?? json['produced_quantity']),
+      avgRollSize: _toDouble(json['avgRollSize'] ?? json['avg_roll_size']),
+      remainingQuantity: _toDouble(json['remainingQuantity'] ?? json['remaining_quantity']),
     );
   }
 
   double get completionPercent {
-    if (orderQuantity <= 0) {
-      return 0;
-    }
-
-    final value = actualProduction / orderQuantity * 100;
-
-    return value.clamp(0, 100);
+    if (orderQuantity <= 0) return 0;
+    return (actualProduction / orderQuantity * 100).clamp(0, 100);
   }
 }
 
@@ -1462,46 +1461,32 @@ class JobDetails {
   });
 
   factory JobDetails.fromJson(Map<String, dynamic> json) {
-    final rawMachines =
-        json['machines'] is List
-            ? json['machines'] as List
-            : const [];
+    final rawMachines = json['machineIds'] ?? json['machine_ids'] ?? json['machines'] ?? const [];
+    final rawYarns = json['yarns'] is List ? json['yarns'] as List : const [];
 
-    final rawYarns =
-        json['yarns'] is List
-            ? json['yarns'] as List
-            : const [];
-
-    final jobData =
-        json['job'] is Map
-            ? Map<String, dynamic>.from(json['job'] as Map)
-            : json;
-
-    final job = JobOrder.fromJson(jobData);
+    final jobData = json['job'] is Map
+        ? Map<String, dynamic>.from(json['job'] as Map)
+        : json;
 
     return JobDetails(
-      job: job,
-      machineIds: rawMachines.map((item) {
-        if (item is Map) {
-          return _toInt(
-            item['machine_id'] ?? item['id'],
-          );
-        }
-
-        return _toInt(item);
-      }).toList(),
+      job: JobOrder.fromJson(jobData),
+      machineIds: rawMachines is List
+          ? rawMachines.map((item) {
+              if (item is Map) {
+                return _toInt(item['machineId'] ?? item['machine_id'] ?? item['id']);
+              }
+              return _toInt(item);
+            }).where((id) => id > 0).toList()
+          : <int>[],
       yarns: rawYarns.map((item) {
         final map = Map<String, dynamic>.from(item as Map);
-
         return JobYarnRequirement(
-          yarnId: _toInt(
-            map['yarn_id'] ?? map['id'],
-          ),
-          quantity: map['quantity'] == null
-              ? map['required_kg'] == null
-                  ? null
-                  : _toDouble(map['required_kg'])
-              : _toDouble(map['quantity']),
+          yarnId: (map['yarnId'] ?? map['yarn_id'] ?? map['id'])?.toString() ?? '',
+          yarnName: (map['yarnName'] ?? map['yarn_name'])?.toString() ?? '',
+          yarnCount: (map['yarnCount'] ?? map['yarn_count'])?.toString() ?? '',
+          quantity: map['quantity'] != null
+              ? _toDouble(map['quantity'])
+              : _toDouble(map['requiredKg'] ?? map['required_kg']),
         );
       }).toList(),
     );

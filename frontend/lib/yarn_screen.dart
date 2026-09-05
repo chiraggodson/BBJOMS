@@ -88,15 +88,6 @@ class _YarnPageState extends State<YarnPage> {
     return 'YRN-${(highestNumber + 1).toString().padLeft(4, '0')}';
   }
 
-  int? get _companyId {
-    for (final yarn in _yarns) {
-      if (yarn.companyId != null && yarn.companyId! > 0) {
-        return yarn.companyId;
-      }
-    }
-
-    return null;
-  }
 
   Future<void> _openYarnForm({YarnMaster? yarn}) async {
     final saved = await showDialog<bool>(
@@ -106,7 +97,6 @@ class _YarnPageState extends State<YarnPage> {
           api: _api,
           yarn: yarn,
           generatedCode: yarn?.code ?? _nextYarnCode(),
-          companyId: yarn?.companyId ?? _companyId,
         );
       },
     );
@@ -735,13 +725,10 @@ class _YarnFormDialog extends StatefulWidget {
   final ApiService api;
   final YarnMaster? yarn;
   final String generatedCode;
-  final int? companyId;
-
   const _YarnFormDialog({
     required this.api,
     required this.yarn,
     required this.generatedCode,
-    required this.companyId,
   });
 
   @override
@@ -830,16 +817,6 @@ class _YarnFormDialogState extends State<_YarnFormDialog> {
       return;
     }
 
-    if (widget.companyId == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            'No company is available for this Yarn.',
-          ),
-        ),
-      );
-      return;
-    }
 
     setState(() {
       _saving = true;
@@ -858,7 +835,6 @@ class _YarnFormDialogState extends State<_YarnFormDialog> {
       if (_editing) {
         await widget.api.updateYarn(
           id: widget.yarn!.id,
-          companyId: widget.companyId!,
           code: code,
           name: name,
           count: count.isEmpty ? null : count,
@@ -872,7 +848,6 @@ class _YarnFormDialogState extends State<_YarnFormDialog> {
         );
       } else {
         await widget.api.createYarn(
-          companyId: widget.companyId!,
           code: code,
           name: name,
           count: count.isEmpty ? null : count,

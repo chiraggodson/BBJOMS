@@ -1404,15 +1404,30 @@ class _NewJobOrderDialogState
     });
 
     try {
-      final fabricId = int.tryParse(_selectedFabric!.id);
-
-      if (fabricId == null) {
+        if (_selectedYarns.isEmpty) {
         if (mounted) {
           setState(() {
             _saving = false;
           });
         }
-        _showError('Selected fabric has an invalid ID.');
+        _showError('Add at least one yarn requirement.');
+        return;
+      }
+
+      final totalPercentage = _selectedYarns.fold<double>(
+        0,
+        (sum, item) => sum + (item.percentage ?? 0),
+      );
+
+      if ((totalPercentage - 100).abs() > 0.01) {
+        if (mounted) {
+          setState(() {
+            _saving = false;
+          });
+        }
+        _showError(
+          'Yarn percentage must total 100%. Current total: ${_formatNumber(totalPercentage)}%.',
+        );
         return;
       }
 
@@ -1420,7 +1435,9 @@ class _NewJobOrderDialogState
           .map(
             (item) => JobYarnRequirement(
               yarnId: item.yarn.id,
-              quantity: item.quantity,
+              yarnName: item.yarn.yarnName,
+              yarnCount: item.yarn.yarnCount,
+              quantity: quantity * ((item.percentage ?? 0) / 100),
             ),
           )
           .toList();
@@ -1428,7 +1445,7 @@ class _NewJobOrderDialogState
       final jobNumbers =
           await widget.apiService.createJob(
         partyId: _selectedParty!.id,
-        fabricId: fabricId,
+        fabricName: _selectedFabric!.name,
         gsm: gsm,
         orderQuantity: quantity,
         machineIds: _selectedMachineIds.toList(),
@@ -1460,33 +1477,120 @@ class _NewJobOrderDialogState
     }
   }
 
-  void _showError(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        backgroundColor: const Color(0xFF7A2525),
+  Future<void> _showError(String message) async {
+    if (!mounted) return;
+
+    await showDialog<void>(
+      context: context,
+      builder: (_) => AlertDialog(
+        backgroundColor: _panel,
+        title: const Row(
+          children: [
+            Icon(Icons.error_outline, color: Color(0xFFF87171)),
+            SizedBox(width: 10),
+            Expanded(child: Text('Cannot Create Job Order')),
+          ],
+        ),
+        content: SelectableText(
+          message.replaceFirst('Exception: ', ''),
+          style: const TextStyle(
+            color: Colors.white70,
+            fontSize: 13,
+            height: 1.4,
+          ),
+        ),
+        actions: [
+          FilledButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Close'),
+          ),
+        ],
       ),
     );
   }
 
-  void _addYarn() {
-    if (_yarns.isEmpty) return;
+  Future<void> _addYarn() async {
+    if (_yarns.isEmpty) {
+      _showError('No active yarns are available.');
+      return;
+    }
 
     final available = _yarns.where(
       (yarn) => !_selectedYarns.any(
         (selected) => selected.yarn.id == yarn.id,
       ),
-    );
+    ).toList();
 
     if (available.isEmpty) {
       _showError('All available yarns are already added.');
       return;
     }
 
+    YarnMaster? selectedYarn = available.first;
+
+    final yarn = await showDialog<YarnMaster>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          backgroundColor: _panel,
+          title: const Text('Select Yarn'),
+          content: SizedBox(
+            width: 420,
+            child: DropdownButtonFormField<YarnMaster>(
+              value: selectedYarn,
+              isExpanded: true,
+              decoration: InputDecoration(
+                labelText: 'Yarn *',
+                filled: true,
+                fillColor: _panel2,
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(9),
+                  borderSide: const BorderSide(color: _border),
+                ),
+              ),
+              items: available.map((yarn) {
+                return DropdownMenuItem<YarnMaster>(
+                  value: yarn,
+                  child: Text(
+                    '${yarn.yarnName} • ${yarn.yarnCount}',
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                );
+              }).toList(),
+              onChanged: (value) {
+                selectedYarn = value;
+              },
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text('Cancel'),
+            ),
+            FilledButton.icon(
+              onPressed: () {
+                if (selectedYarn != null) {
+                  Navigator.pop(dialogContext, selectedYarn);
+                }
+              },
+              icon: const Icon(Icons.add, size: 17),
+              label: const Text('Add Yarn'),
+              style: FilledButton.styleFrom(
+                backgroundColor: _teal,
+                foregroundColor: Colors.white,
+              ),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (yarn == null || !mounted) return;
+
     setState(() {
       _selectedYarns.add(
         _SelectedJobYarn(
-          yarn: available.first,
+          yarn: yarn,
         ),
       );
     });
@@ -1766,6 +1870,9 @@ class _NewJobOrderDialogState
 
           const SizedBox(height: 12),
 
+          if (_selectedYarns.isNotEmpty)
+            _buildYarnPercentageSummary(),
+
           if (_selectedYarns.isEmpty)
             Container(
               width: double.infinity,
@@ -1853,48 +1960,46 @@ class _NewJobOrderDialogState
   Widget _buildYarnRow(
     _SelectedJobYarn item,
   ) {
-    final quantityController =
-        TextEditingController(
-      text: item.quantity == null
+    final percentageController = TextEditingController(
+      text: item.percentage == null
           ? ''
-          : item.quantity.toString(),
+          : _formatNumber(item.percentage!),
     );
 
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: _panel2,
-        borderRadius:
-            BorderRadius.circular(9),
-        border:
-            Border.all(color: _border),
+        borderRadius: BorderRadius.circular(9),
+        border: Border.all(color: _border),
       ),
       child: Row(
         children: [
           Expanded(
             child: Text(
               '${item.yarn.yarnName} • ${item.yarn.yarnCount}',
+              overflow: TextOverflow.ellipsis,
               style: const TextStyle(
                 fontSize: 12,
                 fontWeight: FontWeight.w600,
               ),
             ),
           ),
+          const SizedBox(width: 12),
           SizedBox(
-            width: 150,
+            width: 135,
             child: TextField(
-              controller: quantityController,
-              keyboardType:
-                  const TextInputType.numberWithOptions(
+              controller: percentageController,
+              keyboardType: const TextInputType.numberWithOptions(
                 decimal: true,
               ),
               onChanged: (value) {
-                item.quantity =
-                    double.tryParse(value);
+                item.percentage = double.tryParse(value);
+                setState(() {});
               },
-              decoration:
-                  const InputDecoration(
-                labelText: 'Required kg',
+              decoration: const InputDecoration(
+                labelText: 'Percentage %',
+                suffixText: '%',
                 isDense: true,
               ),
             ),
@@ -1912,6 +2017,80 @@ class _NewJobOrderDialogState
               color: Color(0xFFE57373),
             ),
           ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildYarnPercentageSummary() {
+    final total = _selectedYarns.fold<double>(
+      0,
+      (sum, item) => sum + (item.percentage ?? 0),
+    );
+
+    final difference = total - 100;
+    final valid = difference.abs() <= 0.01;
+
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.symmetric(
+        horizontal: 14,
+        vertical: 11,
+      ),
+      decoration: BoxDecoration(
+        color: valid
+            ? const Color(0xFF153A38)
+            : _panel2,
+        borderRadius: BorderRadius.circular(9),
+        border: Border.all(
+          color: valid
+              ? const Color(0xFF2DD4BF)
+              : _border,
+        ),
+      ),
+      child: Row(
+        children: [
+          Icon(
+            valid
+                ? Icons.check_circle_outline
+                : Icons.percent,
+            size: 18,
+            color: valid
+                ? const Color(0xFF2DD4BF)
+                : _muted,
+          ),
+          const SizedBox(width: 9),
+          Text(
+            'Yarn Mix Total',
+            style: const TextStyle(
+              color: _muted,
+              fontSize: 11,
+            ),
+          ),
+          const Spacer(),
+          Text(
+            '${_formatNumber(total)}%',
+            style: TextStyle(
+              color: valid
+                  ? const Color(0xFF2DD4BF)
+                  : Colors.white,
+              fontSize: 13,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          if (!valid) ...[
+            const SizedBox(width: 10),
+            Text(
+              total < 100
+                  ? '${_formatNumber(100 - total)}% remaining'
+                  : '${_formatNumber(total - 100)}% over',
+              style: const TextStyle(
+                color: Color(0xFFFBBF24),
+                fontSize: 10,
+              ),
+            ),
+          ],
         ],
       ),
     );
@@ -2028,11 +2207,11 @@ class _NewJobOrderDialogState
 
 class _SelectedJobYarn {
   final YarnMaster yarn;
-  double? quantity;
+  double? percentage;
 
   _SelectedJobYarn({
     required this.yarn,
-    this.quantity,
+    this.percentage,
   });
 }
 

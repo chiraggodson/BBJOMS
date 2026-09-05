@@ -11,7 +11,6 @@ const { pool } = require('../db');
 function mapYarn(row) {
   return {
     id: row.id,
-    company_id: row.company_id,
     code: row.code || '',
     name: row.name || '',
     count: row.count || '',
@@ -36,7 +35,6 @@ router.get('/', async (req, res) => {
     const result = await pool.query(`
       SELECT
         id,
-        company_id,
         code,
         name,
         count,
@@ -78,7 +76,6 @@ router.get('/:id', async (req, res) => {
       `
       SELECT
         id,
-        company_id,
         code,
         name,
         count,
@@ -126,7 +123,6 @@ router.get('/:id', async (req, res) => {
 router.post('/', async (req, res) => {
   try {
     const {
-      company_id,
       code,
       name,
       count,
@@ -151,17 +147,9 @@ router.post('/', async (req, res) => {
       });
     }
 
-    if (!company_id) {
-      return res.status(400).json({
-        success: false,
-        error: 'Company ID is required',
-      });
-    }
-
     const result = await pool.query(
       `
       INSERT INTO master.yarns (
-        company_id,
         code,
         name,
         count,
@@ -174,11 +162,10 @@ router.post('/', async (req, res) => {
       )
       VALUES (
         $1, $2, $3, $4, $5,
-        $6, $7, $8, $9, TRUE
+        $6, $7, $8, TRUE
       )
       RETURNING
         id,
-        company_id,
         code,
         name,
         count,
@@ -192,7 +179,6 @@ router.post('/', async (req, res) => {
         updated_at
       `,
       [
-        company_id,
         code.toString().trim(),
         name.toString().trim(),
         count || null,
@@ -234,7 +220,6 @@ router.post('/', async (req, res) => {
 router.put('/:id', async (req, res) => {
   try {
     const {
-      company_id,
       code,
       name,
       count,
@@ -260,32 +245,23 @@ router.put('/:id', async (req, res) => {
       });
     }
 
-    if (!company_id) {
-      return res.status(400).json({
-        success: false,
-        error: 'Company ID is required',
-      });
-    }
-
     const result = await pool.query(
       `
       UPDATE master.yarns
       SET
-        company_id = $1,
-        code = $2,
-        name = $3,
-        count = $4,
-        yarn_type_id = $5,
-        composition = $6,
-        colour = $7,
-        unit_id = $8,
-        description = $9,
-        is_active = $10,
+        code = $1,
+        name = $2,
+        count = $3,
+        yarn_type_id = $4,
+        composition = $5,
+        colour = $6,
+        unit_id = $7,
+        description = $8,
+        is_active = $9,
         updated_at = NOW()
-      WHERE id = $11
+      WHERE id = $10
       RETURNING
         id,
-        company_id,
         code,
         name,
         count,
@@ -299,7 +275,6 @@ router.put('/:id', async (req, res) => {
         updated_at
       `,
       [
-        company_id,
         code.toString().trim(),
         name.toString().trim(),
         count || null,
