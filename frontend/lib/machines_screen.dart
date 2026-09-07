@@ -1,13 +1,14 @@
 import 'package:flutter/material.dart';
+import 'app_theme.dart';
 import 'services/api_service.dart';
 import 'add_machine_page.dart';
 
-const _bg = Color(0xFF0B1117);
-const _panel = Color(0xFF111A22);
-const _panel2 = Color(0xFF0F171E);
-const _border = Color(0xFF1E2A34);
-const _muted = Color(0xFF84919D);
-const _teal = Color(0xFF00BFA6);
+const _bg = BBTheme.canvas;
+const _panel = BBTheme.panel;
+const _panel2 = BBTheme.black3;
+const _border = BBTheme.border;
+const _muted = BBTheme.muted;
+const _accent = BBTheme.red;
 
 class _Card extends StatelessWidget {
   final String title;
@@ -46,7 +47,7 @@ class _Card extends StatelessWidget {
                 Text(
                   action!,
                   style: const TextStyle(
-                    color: _teal,
+                    color: _accent,
                     fontSize: 11,
                     fontWeight: FontWeight.w600,
                   ),
@@ -83,12 +84,12 @@ class _Stat extends StatelessWidget {
             width: 42,
             height: 42,
             decoration: BoxDecoration(
-              color: _teal.withValues(alpha: .12),
+              color: _accent.withValues(alpha: .12),
               borderRadius: BorderRadius.circular(10),
             ),
             child: Icon(
               icon,
-              color: _teal,
+              color: _accent,
               size: 21,
             ),
           ),
@@ -133,7 +134,7 @@ class _Status extends StatelessWidget {
     if (normalized == 'running' ||
         normalized == 'open' ||
         normalized == 'available') {
-      c = const Color(0xFF2DD4BF);
+      c = BBTheme.green;
     } else if (normalized == 'yarn needed' ||
         normalized == 'low stock' ||
         normalized == 'error') {
@@ -172,7 +173,7 @@ class _Status extends StatelessWidget {
 }
 
 InputBorder _inputBorder({
-  Color color = const Color(0xFF25313B),
+  Color color = BBTheme.border,
 }) {
   return OutlineInputBorder(
     borderRadius: BorderRadius.circular(9),
@@ -337,8 +338,8 @@ class _MachinesPageState extends State<MachinesPage> {
                 icon: const Icon(Icons.add, size: 18),
                 label: const Text('Add Machine'),
                 style: OutlinedButton.styleFrom(
-                  foregroundColor: _teal,
-                  side: const BorderSide(color: _teal),
+                  foregroundColor: _accent,
+                  side: const BorderSide(color: _accent),
                 ),
               ),
               const SizedBox(width: 10),
@@ -433,7 +434,7 @@ class _MachinesPageState extends State<MachinesPage> {
                     border: _inputBorder(),
                     enabledBorder: _inputBorder(),
                     focusedBorder: _inputBorder(
-                      color: _teal,
+                      color: _accent,
                     ),
                   ),
                 ),
@@ -442,7 +443,7 @@ class _MachinesPageState extends State<MachinesPage> {
                   const Padding(
                     padding: EdgeInsets.all(50),
                     child: CircularProgressIndicator(
-                      color: _teal,
+                      color: _accent,
                     ),
                   )
                 else if (_error != null)
@@ -511,7 +512,7 @@ class _MachineRegister extends StatelessWidget {
                         backgroundColor: Color(0xFF153A38),
                         child: Icon(
                           Icons.precision_manufacturing_outlined,
-                          color: _teal,
+                          color: _accent,
                           size: 17,
                         ),
                       ),
@@ -759,8 +760,8 @@ OutlinedButton.icon(
   ),
   label: const Text('Edit'),
   style: OutlinedButton.styleFrom(
-    foregroundColor: _teal,
-    side: const BorderSide(color: _teal),
+    foregroundColor: _accent,
+    side: const BorderSide(color: _accent),
     padding: const EdgeInsets.symmetric(
       horizontal: 12,
       vertical: 10,

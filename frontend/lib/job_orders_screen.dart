@@ -1,13 +1,14 @@
 import 'package:flutter/material.dart';
+import 'app_theme.dart';
 
 import 'services/api_service.dart';
 
-const _bg = Color(0xFF0B1117);
-const _panel = Color(0xFF111A22);
-const _panel2 = Color(0xFF0F171E);
-const _border = Color(0xFF1E2A34);
-const _muted = Color(0xFF84919D);
-const _teal = Color(0xFF00BFA6);
+const _bg = BBTheme.canvas;
+const _panel = BBTheme.panel;
+const _panel2 = BBTheme.black3;
+const _border = BBTheme.border;
+const _muted = BBTheme.muted;
+const _accent = BBTheme.red;
 
 class _Card extends StatelessWidget {
   final String title;
@@ -46,7 +47,7 @@ class _Card extends StatelessWidget {
                 Text(
                   action!,
                   style: const TextStyle(
-                    color: _teal,
+                    color: _accent,
                     fontSize: 11,
                     fontWeight: FontWeight.w600,
                   ),
@@ -87,12 +88,12 @@ class _Stat extends StatelessWidget {
             width: 42,
             height: 42,
             decoration: BoxDecoration(
-              color: _teal.withValues(alpha: .12),
+              color: _accent.withValues(alpha: .12),
               borderRadius: BorderRadius.circular(10),
             ),
             child: Icon(
               icon,
-              color: _teal,
+              color: _accent,
               size: 21,
             ),
           ),
@@ -135,7 +136,7 @@ class _Status extends StatelessWidget {
     if (text == 'Running' ||
         text == 'Open' ||
         text == 'Available') {
-      c = const Color(0xFF2DD4BF);
+      c = BBTheme.green;
     }
 
     if (text == 'Yarn Needed' ||
@@ -374,7 +375,7 @@ Future<void> _openNewJob() async {
                     const Text('New Job Order'),
                 style:
                     FilledButton.styleFrom(
-                  backgroundColor: _teal,
+                  backgroundColor: _accent,
                   foregroundColor:
                       Colors.white,
                   padding:
@@ -498,7 +499,7 @@ Future<void> _openNewJob() async {
                       borderSide:
                           const BorderSide(
                         color:
-                            Color(0xFF25313B),
+                            BBTheme.border,
                       ),
                     ),
                     enabledBorder:
@@ -509,7 +510,7 @@ Future<void> _openNewJob() async {
                       borderSide:
                           const BorderSide(
                         color:
-                            Color(0xFF25313B),
+                            BBTheme.border,
                       ),
                     ),
                     focusedBorder:
@@ -519,7 +520,7 @@ Future<void> _openNewJob() async {
                               9),
                       borderSide:
                           const BorderSide(
-                        color: _teal,
+                        color: _accent,
                       ),
                     ),
                   ),
@@ -533,7 +534,7 @@ Future<void> _openNewJob() async {
                         EdgeInsets.all(50),
                     child:
                         CircularProgressIndicator(
-                      color: _teal,
+                      color: _accent,
                     ),
                   )
                 else if (_error != null)
@@ -621,7 +622,7 @@ class _JobTable extends StatelessWidget {
                         child: Icon(
                           Icons
                               .assignment_outlined,
-                          color: _teal,
+                          color: _accent,
                           size: 17,
                         ),
                       ),
@@ -931,8 +932,7 @@ class _JobTable extends StatelessWidget {
   }
 }
 
-class _JobDetailsDialog
-    extends StatelessWidget {
+class _JobDetailsDialog extends StatelessWidget {
   final JobDetails details;
 
   const _JobDetailsDialog({
@@ -944,203 +944,113 @@ class _JobDetailsDialog
     final job = details.job;
 
     return Dialog(
-      backgroundColor: _panel,
-      insetPadding:
-          const EdgeInsets.all(24),
+      backgroundColor: _bg,
+      insetPadding: const EdgeInsets.all(24),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(18),
+        side: const BorderSide(color: _border),
+      ),
       child: ConstrainedBox(
-        constraints:
-            const BoxConstraints(
-          maxWidth: 900,
-          maxHeight: 760,
+        constraints: const BoxConstraints(
+          maxWidth: 980,
+          maxHeight: 820,
         ),
         child: Column(
           children: [
-            Padding(
-              padding:
-                  const EdgeInsets.fromLTRB(
-                24,
-                20,
-                16,
-                18,
-              ),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment:
-                          CrossAxisAlignment
-                              .start,
-                      children: [
-                        Text(
-                          job.jobNo,
-                          style:
-                              const TextStyle(
-                            fontSize: 20,
-                            fontWeight:
-                                FontWeight.w700,
-                          ),
-                        ),
-                        const SizedBox(
-                            height: 4),
-                        Text(
-                          job.partyName,
-                          style:
-                              const TextStyle(
-                            color: _muted,
-                            fontSize: 11,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-
-                  _Status(job.status),
-
-                  const SizedBox(width: 8),
-
-                  IconButton(
-                    onPressed: () =>
-                        Navigator.pop(
-                            context),
-                    icon:
-                        const Icon(Icons.close),
-                  ),
-                ],
-              ),
-            ),
-
-            const Divider(
-              height: 1,
-              color: _border,
-            ),
-
+            _buildHeader(context, job),
+            const Divider(height: 1, color: _border),
             Expanded(
-              child:
-                  SingleChildScrollView(
-                padding:
-                    const EdgeInsets.all(24),
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.fromLTRB(28, 24, 28, 28),
                 child: Column(
-                  crossAxisAlignment:
-                      CrossAxisAlignment
-                          .start,
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    _DetailSection(
-                      title:
-                          'Job Information',
-                      children: [
-                        _DetailItem(
-                          'Job No.',
-                          job.jobNo,
-                        ),
-                        _DetailItem(
-                          'Party',
-                          job.partyName,
-                        ),
-                        _DetailItem(
-                          'Fabric',
-                          job.fabricName,
-                        ),
-                        _DetailItem(
-                          'GSM',
-                          _formatNumber(
-                              job.gsm),
-                        ),
-                        _DetailItem(
-                          'Order Quantity',
-                          '${_formatNumber(job.orderQuantity)} kg',
-                        ),
-                        _DetailItem(
-                          'Produced',
-                          '${_formatNumber(job.actualProduction)} kg',
-                        ),
-                        _DetailItem(
-                          'Remaining',
-                          '${_formatNumber(job.remainingQuantity)} kg',
-                        ),
-                        _DetailItem(
-                          'Machine',
-                          job.machineNo.isEmpty
-                              ? '—'
-                              : job.machineNo,
-                        ),
-                        _DetailItem(
-                          'Average Roll Size',
-                          '${_formatNumber(job.avgRollSize)} kg',
-                        ),
-                        _DetailItem(
-                          'Yarn Used',
-                          job.yarnsUsed.isEmpty
-                              ? '—'
-                              : job.yarnsUsed,
-                        ),
-                      ],
+                    _sectionHeading(
+                      'JOB INFORMATION',
+                      Icons.assignment_outlined,
+                    ),
+                    const SizedBox(height: 12),
+                    _detailGrid([
+                      _DetailItem('Job No.', job.jobNo, emphasis: true),
+                      _DetailItem(
+                        'Date Created',
+                        _formatDateFromString(job.createdAt),
+                      ),
+                      _DetailItem('Party', job.partyName),
+                      _DetailItem('Fabric', job.fabricName),
+                      _DetailItem('GSM', _formatNumber(job.gsm)),
+                      _DetailItem(
+                        'Order Quantity',
+                        '${_formatNumber(job.orderQuantity)} kg',
+                      ),
+                      _DetailItem(
+                        'Machine',
+                        job.machineNo.isEmpty ? '—' : job.machineNo,
+                      ),
+                    ]),
+
+                    const SizedBox(height: 26),
+
+                    _sectionHeading(
+                      'PRODUCTION',
+                      Icons.factory_outlined,
+                    ),
+                    const SizedBox(height: 12),
+                    _detailGrid([
+                      _MetricItem(
+                        'Produced',
+                        '${_formatNumber(job.actualProduction)} kg',
+                        Icons.check_circle_outline,
+                      ),
+                      _MetricItem(
+                        'Remaining',
+                        '${_formatNumber(job.remainingQuantity)} kg',
+                        Icons.timelapse_outlined,
+                      ),
+                      _MetricItem(
+                        'Average Roll Size',
+                        '${_formatNumber(job.avgRollSize)} kg',
+                        Icons.scale_outlined,
+                      ),
+                      _MetricItem(
+                        'Status',
+                        job.status.isEmpty ? 'Unknown' : job.status,
+                        Icons.flag_outlined,
+                      ),
+                    ]),
+
+                    const SizedBox(height: 26),
+
+                    _sectionHeading(
+                      'YARN USED',
+                      Icons.layers_outlined,
+                    ),
+                    const SizedBox(height: 12),
+                    _YarnUsedCard(
+                      yarns: details.yarns,
+                      fallback: job.yarnsUsed,
                     ),
 
-                    const SizedBox(
-                        height: 24),
+                    const SizedBox(height: 26),
 
-                    _DetailSection(
-                      title:
-                          'Assigned Machines',
-                      children:
-                          details.machineIds
-                                  .isEmpty
-                              ? const [
-                                  Text(
-                                    'No machine assignment data.',
-                                    style:
-                                        TextStyle(
-                                      color:
-                                          _muted,
-                                      fontSize:
-                                          12,
-                                    ),
-                                  ),
-                                ]
-                              : details
-                                  .machineIds
-                                  .map(
-                                    (id) =>
-                                        _DetailItem(
-                                      'Machine ID',
-                                      id.toString(),
-                                    ),
-                                  )
-                                  .toList(),
+                    _sectionHeading(
+                      'ASSIGNED MACHINES',
+                      Icons.precision_manufacturing_outlined,
+                    ),
+                    const SizedBox(height: 12),
+                    _MachineList(
+                      machineIds: details.machineIds,
                     ),
 
-                    const SizedBox(
-                        height: 24),
+                    const SizedBox(height: 26),
 
-                    _DetailSection(
-                      title:
-                          'Yarn Requirements',
-                      children:
-                          details.yarns.isEmpty
-                              ? const [
-                                  Text(
-                                    'No yarn requirements recorded.',
-                                    style:
-                                        TextStyle(
-                                      color:
-                                          _muted,
-                                      fontSize:
-                                          12,
-                                    ),
-                                  ),
-                                ]
-                              : details.yarns
-                                  .map(
-                                    (yarn) =>
-                                        _DetailItem(
-                                      'Yarn ID ${yarn.yarnId}',
-                                      yarn.quantity ==
-                                              null
-                                          ? 'Quantity not specified'
-                                          : '${_formatNumber(yarn.quantity!)} kg',
-                                    ),
-                                  )
-                                  .toList(),
+                    _sectionHeading(
+                      'YARN REQUIREMENTS',
+                      Icons.inventory_2_outlined,
+                    ),
+                    const SizedBox(height: 12),
+                    _YarnRequirements(
+                      yarns: details.yarns,
                     ),
                   ],
                 ),
@@ -1151,88 +1061,540 @@ class _JobDetailsDialog
       ),
     );
   }
-}
 
-class _DetailSection
-    extends StatelessWidget {
-  final String title;
-  final List<Widget> children;
+  Widget _buildHeader(BuildContext context, JobOrder job) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(28, 22, 18, 20),
+      child: Row(
+        children: [
+          Container(
+            width: 46,
+            height: 46,
+            decoration: BoxDecoration(
+              color: _accent.withValues(alpha: .12),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: _accent.withValues(alpha: .28),
+              ),
+            ),
+            child: const Icon(
+              Icons.assignment_outlined,
+              color: _accent,
+              size: 23,
+            ),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  job.jobNo,
+                  style: const TextStyle(
+                    fontSize: 22,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: .2,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  job.partyName.isEmpty
+                      ? 'Job Order Details'
+                      : job.partyName,
+                  style: const TextStyle(
+                    color: _muted,
+                    fontSize: 12,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          _Status(job.status),
+          const SizedBox(width: 10),
+          IconButton(
+            tooltip: 'Close',
+            onPressed: () => Navigator.pop(context),
+            icon: const Icon(Icons.close),
+          ),
+        ],
+      ),
+    );
+  }
 
-  const _DetailSection({
-    required this.title,
-    required this.children,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment:
-          CrossAxisAlignment.start,
+  Widget _sectionHeading(String title, IconData icon) {
+    return Row(
       children: [
+        Icon(icon, color: _accent, size: 17),
+        const SizedBox(width: 8),
         Text(
           title,
           style: const TextStyle(
-            fontSize: 14,
-            fontWeight: FontWeight.w700,
+            fontSize: 12,
+            fontWeight: FontWeight.w800,
+            letterSpacing: 1.0,
+            color: Colors.white,
           ),
         ),
-        const SizedBox(height: 12),
-        Wrap(
-          spacing: 14,
-          runSpacing: 14,
-          children: children,
+        const SizedBox(width: 12),
+        Expanded(
+          child: Container(
+            height: 1,
+            color: _border,
+          ),
         ),
       ],
     );
   }
+
+  Widget _detailGrid(List<Widget> items) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final columns = constraints.maxWidth >= 760
+            ? 3
+            : constraints.maxWidth >= 500
+                ? 2
+                : 1;
+        final gap = 12.0;
+        final width =
+            (constraints.maxWidth - gap * (columns - 1)) / columns;
+
+        return Wrap(
+          spacing: gap,
+          runSpacing: gap,
+          children: items
+              .map(
+                (item) => SizedBox(
+                  width: width,
+                  child: item,
+                ),
+              )
+              .toList(),
+        );
+      },
+    );
+  }
 }
 
-class _DetailItem
-    extends StatelessWidget {
+class _DetailItem extends StatelessWidget {
   final String label;
   final String value;
+  final bool emphasis;
 
   const _DetailItem(
     this.label,
+    this.value, {
+    this.emphasis = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      constraints: const BoxConstraints(minHeight: 72),
+      padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+      decoration: BoxDecoration(
+        color: _panel,
+        borderRadius: BorderRadius.circular(11),
+        border: Border.all(color: _border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Text(
+            label.toUpperCase(),
+            style: const TextStyle(
+              color: _muted,
+              fontSize: 9,
+              fontWeight: FontWeight.w600,
+              letterSpacing: .7,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            value.isEmpty ? '—' : value,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              color: emphasis ? Colors.white : Colors.white,
+              fontSize: 14,
+              fontWeight: emphasis ? FontWeight.w800 : FontWeight.w700,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _MetricItem extends StatelessWidget {
+  final String label;
+  final String value;
+  final IconData icon;
+
+  const _MetricItem(
+    this.label,
     this.value,
+    this.icon,
   );
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      width: 250,
-      padding:
-          const EdgeInsets.all(13),
+      constraints: const BoxConstraints(minHeight: 76),
+      padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: _panel2,
-        borderRadius:
-            BorderRadius.circular(9),
-        border:
-            Border.all(color: _border),
+        color: _panel,
+        borderRadius: BorderRadius.circular(11),
+        border: Border.all(color: _border),
       ),
-      child: Column(
-        crossAxisAlignment:
-            CrossAxisAlignment.start,
+      child: Row(
         children: [
-          Text(
-            label,
-            style: const TextStyle(
-              color: _muted,
-              fontSize: 10,
+          Container(
+            width: 34,
+            height: 34,
+            decoration: BoxDecoration(
+              color: _accent.withValues(alpha: .10),
+              borderRadius: BorderRadius.circular(9),
+            ),
+            child: Icon(
+              icon,
+              color: _accent,
+              size: 18,
             ),
           ),
-          const SizedBox(height: 4),
-          Text(
-            value,
-            overflow:
-                TextOverflow.ellipsis,
-            style: const TextStyle(
-              fontSize: 12,
-              fontWeight:
-                  FontWeight.w600,
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Text(
+                  label.toUpperCase(),
+                  style: const TextStyle(
+                    color: _muted,
+                    fontSize: 9,
+                    fontWeight: FontWeight.w600,
+                    letterSpacing: .6,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  value,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ],
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _YarnUsedCard extends StatelessWidget {
+  final List<JobYarnRequirement> yarns;
+  final String fallback;
+
+  const _YarnUsedCard({
+    required this.yarns,
+    required this.fallback,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final names = yarns
+        .map(
+          (yarn) => yarn.yarnName.isEmpty
+              ? 'Yarn ${yarn.yarnId}'
+              : yarn.yarnName,
+        )
+        .where((name) => name.trim().isNotEmpty)
+        .toList();
+
+    if (names.isEmpty) {
+      return _EmptyDetailCard(
+        fallback.isEmpty ? 'No yarn usage recorded.' : fallback,
+      );
+    }
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: _panel,
+        borderRadius: BorderRadius.circular(11),
+        border: Border.all(color: _border),
+      ),
+      child: Wrap(
+        spacing: 10,
+        runSpacing: 10,
+        children: names.map((name) {
+          return Container(
+            padding: const EdgeInsets.symmetric(
+              horizontal: 12,
+              vertical: 9,
+            ),
+            decoration: BoxDecoration(
+              color: _accent.withValues(alpha: .08),
+              borderRadius: BorderRadius.circular(9),
+              border: Border.all(
+                color: _accent.withValues(alpha: .24),
+              ),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(
+                  Icons.circle,
+                  size: 6,
+                  color: _accent,
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  name,
+                  style: const TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ],
+            ),
+          );
+        }).toList(),
+      ),
+    );
+  }
+}
+
+class _MachineList extends StatelessWidget {
+  final List<int> machineIds;
+
+  const _MachineList({
+    required this.machineIds,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    if (machineIds.isEmpty) {
+      return const _EmptyDetailCard(
+        'No machine assignment data.',
+      );
+    }
+
+    return Wrap(
+      spacing: 10,
+      runSpacing: 10,
+      children: machineIds.map((id) {
+        return Container(
+          constraints: const BoxConstraints(minWidth: 150),
+          padding: const EdgeInsets.symmetric(
+            horizontal: 14,
+            vertical: 11,
+          ),
+          decoration: BoxDecoration(
+            color: _panel,
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: _border),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(
+                Icons.precision_manufacturing_outlined,
+                color: _muted,
+                size: 17,
+              ),
+              const SizedBox(width: 9),
+              Text(
+                'Machine $id',
+                style: const TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ],
+          ),
+        );
+      }).toList(),
+    );
+  }
+}
+
+class _YarnRequirements extends StatelessWidget {
+  final List<JobYarnRequirement> yarns;
+
+  const _YarnRequirements({
+    required this.yarns,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    if (yarns.isEmpty) {
+      return const _EmptyDetailCard(
+        'No yarn requirements recorded.',
+      );
+    }
+
+    return Container(
+      width: double.infinity,
+      decoration: BoxDecoration(
+        color: _panel,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: _border),
+      ),
+      child: Column(
+        children: [
+          Container(
+            padding: const EdgeInsets.symmetric(
+              horizontal: 16,
+              vertical: 11,
+            ),
+            decoration: BoxDecoration(
+              color: _panel2,
+              borderRadius: const BorderRadius.vertical(
+                top: Radius.circular(11),
+              ),
+            ),
+            child: const Row(
+              children: [
+                Expanded(
+                  flex: 5,
+                  child: Text(
+                    'YARN',
+                    style: TextStyle(
+                      color: _muted,
+                      fontSize: 9,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: .8,
+                    ),
+                  ),
+                ),
+                Expanded(
+                  flex: 3,
+                  child: Text(
+                    'COUNT',
+                    style: TextStyle(
+                      color: _muted,
+                      fontSize: 9,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: .8,
+                    ),
+                  ),
+                ),
+                SizedBox(
+                  width: 120,
+                  child: Text(
+                    'REQUIRED',
+                    textAlign: TextAlign.right,
+                    style: TextStyle(
+                      color: _muted,
+                      fontSize: 9,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: .8,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          ...List.generate(yarns.length, (index) {
+            final yarn = yarns[index];
+            final name = yarn.yarnName.isEmpty
+                ? 'Yarn ${yarn.yarnId}'
+                : yarn.yarnName;
+            final count = yarn.yarnCount.isEmpty
+                ? '—'
+                : yarn.yarnCount;
+            final quantity = yarn.quantity == null
+                ? '—'
+                : '${_formatNumber(yarn.quantity!)} kg';
+
+            return Container(
+              padding: const EdgeInsets.symmetric(
+                horizontal: 16,
+                vertical: 13,
+              ),
+              decoration: BoxDecoration(
+                border: Border(
+                  top: BorderSide(
+                    color: _border.withValues(alpha: .75),
+                  ),
+                ),
+              ),
+              child: Row(
+                children: [
+                  Expanded(
+                    flex: 5,
+                    child: Text(
+                      name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                  Expanded(
+                    flex: 3,
+                    child: Text(
+                      count,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: _muted,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                  SizedBox(
+                    width: 120,
+                    child: Text(
+                      quantity,
+                      textAlign: TextAlign.right,
+                      style: const TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            );
+          }),
+        ],
+      ),
+    );
+  }
+}
+
+class _EmptyDetailCard extends StatelessWidget {
+  final String text;
+
+  const _EmptyDetailCard(this.text);
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: _panel,
+        borderRadius: BorderRadius.circular(11),
+        border: Border.all(color: _border),
+      ),
+      child: Text(
+        text,
+        style: const TextStyle(
+          color: _muted,
+          fontSize: 12,
+        ),
       ),
     );
   }
@@ -1404,40 +1766,28 @@ class _NewJobOrderDialogState
     });
 
     try {
-        if (_selectedYarns.isEmpty) {
+      final fabricId = int.tryParse(_selectedFabric!.id);
+
+      if (fabricId == null) {
         if (mounted) {
           setState(() {
             _saving = false;
           });
         }
-        _showError('Add at least one yarn requirement.');
-        return;
-      }
-
-      final totalPercentage = _selectedYarns.fold<double>(
-        0,
-        (sum, item) => sum + (item.percentage ?? 0),
-      );
-
-      if ((totalPercentage - 100).abs() > 0.01) {
-        if (mounted) {
-          setState(() {
-            _saving = false;
-          });
-        }
-        _showError(
-          'Yarn percentage must total 100%. Current total: ${_formatNumber(totalPercentage)}%.',
-        );
+        _showError('Selected fabric has an invalid ID.');
         return;
       }
 
       final jobYarns = _selectedYarns
+          .where(
+            (item) =>
+                item.quantity != null &&
+                item.quantity! > 0,
+          )
           .map(
             (item) => JobYarnRequirement(
               yarnId: item.yarn.id,
-              yarnName: item.yarn.yarnName,
-              yarnCount: item.yarn.yarnCount,
-              quantity: quantity * ((item.percentage ?? 0) / 100),
+              quantity: item.quantity,
             ),
           )
           .toList();
@@ -1445,7 +1795,7 @@ class _NewJobOrderDialogState
       final jobNumbers =
           await widget.apiService.createJob(
         partyId: _selectedParty!.id,
-        fabricName: _selectedFabric!.name,
+        fabricId: fabricId,
         gsm: gsm,
         orderQuantity: quantity,
         machineIds: _selectedMachineIds.toList(),
@@ -1463,7 +1813,7 @@ class _NewJobOrderDialogState
                 ? 'Job ${jobNumbers.first} created successfully.'
                 : '${jobNumbers.length} job orders created successfully.',
           ),
-          backgroundColor: _teal,
+          backgroundColor: _accent,
         ),
       );
     } catch (e) {
@@ -1477,120 +1827,33 @@ class _NewJobOrderDialogState
     }
   }
 
-  Future<void> _showError(String message) async {
-    if (!mounted) return;
-
-    await showDialog<void>(
-      context: context,
-      builder: (_) => AlertDialog(
-        backgroundColor: _panel,
-        title: const Row(
-          children: [
-            Icon(Icons.error_outline, color: Color(0xFFF87171)),
-            SizedBox(width: 10),
-            Expanded(child: Text('Cannot Create Job Order')),
-          ],
-        ),
-        content: SelectableText(
-          message.replaceFirst('Exception: ', ''),
-          style: const TextStyle(
-            color: Colors.white70,
-            fontSize: 13,
-            height: 1.4,
-          ),
-        ),
-        actions: [
-          FilledButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Close'),
-          ),
-        ],
+  void _showError(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: const Color(0xFF7A2525),
       ),
     );
   }
 
-  Future<void> _addYarn() async {
-    if (_yarns.isEmpty) {
-      _showError('No active yarns are available.');
-      return;
-    }
+  void _addYarn() {
+    if (_yarns.isEmpty) return;
 
     final available = _yarns.where(
       (yarn) => !_selectedYarns.any(
         (selected) => selected.yarn.id == yarn.id,
       ),
-    ).toList();
+    );
 
     if (available.isEmpty) {
       _showError('All available yarns are already added.');
       return;
     }
 
-    YarnMaster? selectedYarn = available.first;
-
-    final yarn = await showDialog<YarnMaster>(
-      context: context,
-      builder: (dialogContext) {
-        return AlertDialog(
-          backgroundColor: _panel,
-          title: const Text('Select Yarn'),
-          content: SizedBox(
-            width: 420,
-            child: DropdownButtonFormField<YarnMaster>(
-              value: selectedYarn,
-              isExpanded: true,
-              decoration: InputDecoration(
-                labelText: 'Yarn *',
-                filled: true,
-                fillColor: _panel2,
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(9),
-                  borderSide: const BorderSide(color: _border),
-                ),
-              ),
-              items: available.map((yarn) {
-                return DropdownMenuItem<YarnMaster>(
-                  value: yarn,
-                  child: Text(
-                    '${yarn.yarnName} • ${yarn.yarnCount}',
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                );
-              }).toList(),
-              onChanged: (value) {
-                selectedYarn = value;
-              },
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(dialogContext),
-              child: const Text('Cancel'),
-            ),
-            FilledButton.icon(
-              onPressed: () {
-                if (selectedYarn != null) {
-                  Navigator.pop(dialogContext, selectedYarn);
-                }
-              },
-              icon: const Icon(Icons.add, size: 17),
-              label: const Text('Add Yarn'),
-              style: FilledButton.styleFrom(
-                backgroundColor: _teal,
-                foregroundColor: Colors.white,
-              ),
-            ),
-          ],
-        );
-      },
-    );
-
-    if (yarn == null || !mounted) return;
-
     setState(() {
       _selectedYarns.add(
         _SelectedJobYarn(
-          yarn: yarn,
+          yarn: available.first,
         ),
       );
     });
@@ -1617,7 +1880,7 @@ class _NewJobOrderDialogState
               child: _loading
                   ? const Center(
                       child: CircularProgressIndicator(
-                        color: _teal,
+                        color: _accent,
                       ),
                     )
                   : _error != null
@@ -1870,9 +2133,6 @@ class _NewJobOrderDialogState
 
           const SizedBox(height: 12),
 
-          if (_selectedYarns.isNotEmpty)
-            _buildYarnPercentageSummary(),
-
           if (_selectedYarns.isEmpty)
             Container(
               width: double.infinity,
@@ -1941,7 +2201,7 @@ class _NewJobOrderDialogState
                 ),
                 style:
                     FilledButton.styleFrom(
-                  backgroundColor: _teal,
+                  backgroundColor: _accent,
                   foregroundColor: Colors.white,
                   padding:
                       const EdgeInsets.symmetric(
@@ -1960,46 +2220,48 @@ class _NewJobOrderDialogState
   Widget _buildYarnRow(
     _SelectedJobYarn item,
   ) {
-    final percentageController = TextEditingController(
-      text: item.percentage == null
+    final quantityController =
+        TextEditingController(
+      text: item.quantity == null
           ? ''
-          : _formatNumber(item.percentage!),
+          : item.quantity.toString(),
     );
 
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: _panel2,
-        borderRadius: BorderRadius.circular(9),
-        border: Border.all(color: _border),
+        borderRadius:
+            BorderRadius.circular(9),
+        border:
+            Border.all(color: _border),
       ),
       child: Row(
         children: [
           Expanded(
             child: Text(
               '${item.yarn.yarnName} • ${item.yarn.yarnCount}',
-              overflow: TextOverflow.ellipsis,
               style: const TextStyle(
                 fontSize: 12,
                 fontWeight: FontWeight.w600,
               ),
             ),
           ),
-          const SizedBox(width: 12),
           SizedBox(
-            width: 135,
+            width: 150,
             child: TextField(
-              controller: percentageController,
-              keyboardType: const TextInputType.numberWithOptions(
+              controller: quantityController,
+              keyboardType:
+                  const TextInputType.numberWithOptions(
                 decimal: true,
               ),
               onChanged: (value) {
-                item.percentage = double.tryParse(value);
-                setState(() {});
+                item.quantity =
+                    double.tryParse(value);
               },
-              decoration: const InputDecoration(
-                labelText: 'Percentage %',
-                suffixText: '%',
+              decoration:
+                  const InputDecoration(
+                labelText: 'Required kg',
                 isDense: true,
               ),
             ),
@@ -2017,80 +2279,6 @@ class _NewJobOrderDialogState
               color: Color(0xFFE57373),
             ),
           ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildYarnPercentageSummary() {
-    final total = _selectedYarns.fold<double>(
-      0,
-      (sum, item) => sum + (item.percentage ?? 0),
-    );
-
-    final difference = total - 100;
-    final valid = difference.abs() <= 0.01;
-
-    return Container(
-      width: double.infinity,
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.symmetric(
-        horizontal: 14,
-        vertical: 11,
-      ),
-      decoration: BoxDecoration(
-        color: valid
-            ? const Color(0xFF153A38)
-            : _panel2,
-        borderRadius: BorderRadius.circular(9),
-        border: Border.all(
-          color: valid
-              ? const Color(0xFF2DD4BF)
-              : _border,
-        ),
-      ),
-      child: Row(
-        children: [
-          Icon(
-            valid
-                ? Icons.check_circle_outline
-                : Icons.percent,
-            size: 18,
-            color: valid
-                ? const Color(0xFF2DD4BF)
-                : _muted,
-          ),
-          const SizedBox(width: 9),
-          Text(
-            'Yarn Mix Total',
-            style: const TextStyle(
-              color: _muted,
-              fontSize: 11,
-            ),
-          ),
-          const Spacer(),
-          Text(
-            '${_formatNumber(total)}%',
-            style: TextStyle(
-              color: valid
-                  ? const Color(0xFF2DD4BF)
-                  : Colors.white,
-              fontSize: 13,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-          if (!valid) ...[
-            const SizedBox(width: 10),
-            Text(
-              total < 100
-                  ? '${_formatNumber(100 - total)}% remaining'
-                  : '${_formatNumber(total - 100)}% over',
-              style: const TextStyle(
-                color: Color(0xFFFBBF24),
-                fontSize: 10,
-              ),
-            ),
-          ],
         ],
       ),
     );
@@ -2125,7 +2313,7 @@ class _NewJobOrderDialogState
               BorderRadius.circular(9),
           borderSide:
               const BorderSide(
-            color: Color(0xFF25313B),
+            color: BBTheme.border,
           ),
         ),
         enabledBorder:
@@ -2134,7 +2322,7 @@ class _NewJobOrderDialogState
               BorderRadius.circular(9),
           borderSide:
               const BorderSide(
-            color: Color(0xFF25313B),
+            color: BBTheme.border,
           ),
         ),
         focusedBorder:
@@ -2143,7 +2331,7 @@ class _NewJobOrderDialogState
               BorderRadius.circular(9),
           borderSide:
               const BorderSide(
-            color: _teal,
+            color: _accent,
           ),
         ),
       ),
@@ -2169,7 +2357,7 @@ class _NewJobOrderDialogState
               BorderRadius.circular(9),
           borderSide:
               const BorderSide(
-            color: Color(0xFF25313B),
+            color: BBTheme.border,
           ),
         ),
         enabledBorder:
@@ -2178,7 +2366,7 @@ class _NewJobOrderDialogState
               BorderRadius.circular(9),
           borderSide:
               const BorderSide(
-            color: Color(0xFF25313B),
+            color: BBTheme.border,
           ),
         ),
         focusedBorder:
@@ -2187,7 +2375,7 @@ class _NewJobOrderDialogState
               BorderRadius.circular(9),
           borderSide:
               const BorderSide(
-            color: _teal,
+            color: _accent,
           ),
         ),
       ),
@@ -2207,11 +2395,11 @@ class _NewJobOrderDialogState
 
 class _SelectedJobYarn {
   final YarnMaster yarn;
-  double? percentage;
+  double? quantity;
 
   _SelectedJobYarn({
     required this.yarn,
-    this.percentage,
+    this.quantity,
   });
 }
 

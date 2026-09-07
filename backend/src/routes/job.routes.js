@@ -4,28 +4,18 @@ const { pool } = require('../db');
 const router = express.Router();
 
 /*
- * BBJOMS JOB ORDERS API
+ * BBJOMS Job Orders API
  *
  * Current database tables:
- *
  *   job_orders
  *   job_order_machines
  *   job_order_yarns
  *   job_production
  *   parties
  *
- * This version DOES NOT depend on:
- *
- *   fabrics
- *   machines
- *   yarn_master
- *
- * because those tables are not currently present in the database.
+ * IMPORTANT:
+ * This route does NOT depend on fabrics, machines or yarn_master tables.
  */
-
-// ============================================================
-// HELPERS
-// ============================================================
 
 function toNumber(value, fallback = 0) {
   if (value === null || value === undefined || value === '') {
@@ -51,17 +41,14 @@ function normaliseMachines(value) {
   }
 
   return value
-    .map((item) => {
-      if (typeof item === 'object' && item !== null) {
-        return toNumber(
-          item.machine_id ?? item.machineId ?? item.id,
-          0,
-        );
-      }
+      .map((item) => {
+        if (typeof item === 'object' && item !== null) {
+          return toNumber(item.machine_id ?? item.id, 0);
+        }
 
-      return toNumber(item, 0);
-    })
-    .filter((id) => id > 0);
+        return toNumber(item, 0);
+      })
+      .filter((id) => id > 0);
 }
 
 function normaliseYarns(value) {
@@ -70,45 +57,39 @@ function normaliseYarns(value) {
   }
 
   return value
-    .map((item) => ({
-      yarn_name: cleanString(
-        item?.yarn_name ?? item?.yarnName,
-      ),
-
-      yarn_count: cleanString(
-        item?.yarn_count ?? item?.yarnCount,
-      ),
-
-      required_kg: toNumber(
-        item?.required_kg ?? item?.requiredKg,
-      ),
-
-      issued_kg: toNumber(
-        item?.issued_kg ?? item?.issuedKg,
-      ),
-
-      returned_kg: toNumber(
-        item?.returned_kg ?? item?.returnedKg,
-      ),
-
-      waste_kg: toNumber(
-        item?.waste_kg ?? item?.wasteKg,
-      ),
-    }))
-    .filter(
-      (yarn) =>
-        yarn.yarn_name ||
-        yarn.yarn_count ||
-        yarn.required_kg > 0,
-    );
+      .map((item) => ({
+        yarn_name: cleanString(
+          item?.yarn_name ?? item?.yarnName,
+        ),
+        yarn_count: cleanString(
+          item?.yarn_count ?? item?.yarnCount,
+        ),
+        required_kg: toNumber(
+          item?.required_kg ?? item?.requiredKg,
+        ),
+        issued_kg: toNumber(
+          item?.issued_kg ?? item?.issuedKg,
+        ),
+        returned_kg: toNumber(
+          item?.returned_kg ?? item?.returnedKg,
+        ),
+        waste_kg: toNumber(
+          item?.waste_kg ?? item?.wasteKg,
+        ),
+      }))
+      .filter(
+        (yarn) =>
+          yarn.yarn_name ||
+          yarn.yarn_count ||
+          yarn.required_kg > 0,
+      );
 }
 
-// ============================================================
-// GET COMPLETE JOB BY ID
-// ============================================================
-
-async function getJobById(db, id) {
-  const jobResult = await db.query(
+/*
+ * GET ONE COMPLETE JOB
+ */
+async function getJobById(client, id) {
+  const jobResult = await client.query(
     `
     SELECT
       j.id,
@@ -120,42 +101,55 @@ async function getJobById(db, id) {
       j.design_no,
       j.gsm,
       j.order_quantity,
-      COALESCE(j.status, 'Open') AS status,
+      j.status,
       j.stitch_length,
       j.notes,
       j.created_at,
       j.updated_at,
 
-      COALESCE(
-        (
-          SELECT SUM(jp.quantity_kg)
-          FROM job_production jp
-          WHERE jp.job_order_id = j.id
-        ),
-        0
-      ) AS produced_quantity,
+      COALESCE(prod.produced_quantity, 0)
+        AS produced_quantity,
 
       GREATEST(
-        j.order_quantity -
-        COALESCE(
-          (
-            SELECT SUM(jp.quantity_kg)
-            FROM job_production jp
-            WHERE jp.job_order_id = j.id
-          ),
-          0
-        ),
+        j.order_quantity
+        - COALESCE(prod.produced_quantity, 0),
         0
-      ) AS remaining_quantity
+      ) AS remaining_quantity,
+
+      COALESCE(
+        ARRAY_AGG(DISTINCT jom.machine_id)
+        FILTER (
+          WHERE jom.machine_id IS NOT NULL
+        ),
+        ARRAY[]::bigint[]
+      ) AS machine_ids
 
     FROM job_orders j
 
     LEFT JOIN parties p
       ON p.id = j.party_id
 
+    LEFT JOIN job_order_machines jom
+      ON jom.job_order_id = j.id
+
+    LEFT JOIN (
+      SELECT
+        job_order_id,
+        COALESCE(
+          SUM(quantity_kg),
+          0
+        ) AS produced_quantity
+      FROM job_production
+      GROUP BY job_order_id
+    ) prod
+      ON prod.job_order_id = j.id
+
     WHERE j.id = $1
 
-    LIMIT 1
+    GROUP BY
+      j.id,
+      p.name,
+      prod.produced_quantity
     `,
     [id],
   );
@@ -166,36 +160,38 @@ async function getJobById(db, id) {
 
   const job = jobResult.rows[0];
 
-  const machineResult = await db.query(
+  const yarnResult = await client.query(
     `
     SELECT
-      machine_id
-    FROM job_order_machines
-    WHERE job_order_id = $1
+      joy.id,
+      joy.job_order_id,
+      ym.id AS yarn_id,
+      joy.yarn_name,
+      joy.yarn_count,
+      joy.required_kg,
+      joy.issued_kg,
+      joy.returned_kg,
+      joy.waste_kg,
+      joy.created_at,
+      joy.updated_at
+
+    FROM job_order_yarns joy
+    LEFT JOIN master.yarns ym
+      ON LOWER(TRIM(ym.name)) = LOWER(TRIM(joy.yarn_name))
+     AND (
+       joy.yarn_count IS NULL
+       OR TRIM(joy.yarn_count) = ''
+       OR LOWER(TRIM(ym.count)) = LOWER(TRIM(joy.yarn_count))
+     )
+
+    WHERE joy.job_order_id = $1
+
     ORDER BY id
     `,
     [id],
   );
 
-  const yarnResult = await db.query(
-    `
-    SELECT
-      id,
-      job_order_id,
-      yarn_name,
-      yarn_count,
-      required_kg,
-      issued_kg,
-      returned_kg,
-      waste_kg
-    FROM job_order_yarns
-    WHERE job_order_id = $1
-    ORDER BY id
-    `,
-    [id],
-  );
-
-  const productionResult = await db.query(
+  const productionResult = await client.query(
     `
     SELECT
       id,
@@ -206,8 +202,11 @@ async function getJobById(db, id) {
       quantity_kg,
       remarks,
       created_at
+
     FROM job_production
+
     WHERE job_order_id = $1
+
     ORDER BY
       production_date DESC NULLS LAST,
       id DESC
@@ -215,9 +214,11 @@ async function getJobById(db, id) {
     [id],
   );
 
-  const machineIds = machineResult.rows
-    .map((row) => toNumber(row.machine_id, 0))
-    .filter((id) => id > 0);
+  const machineIds = Array.isArray(job.machine_ids)
+    ? job.machine_ids.map((machineId) =>
+        Number(machineId),
+      )
+    : [];
 
   return {
     id: Number(job.id),
@@ -265,6 +266,9 @@ async function getJobById(db, id) {
     yarns: yarnResult.rows.map((yarn) => ({
       id: Number(yarn.id),
 
+      yarnId:
+        yarn.yarn_id ? String(yarn.yarn_id) : '',
+
       jobOrderId:
         Number(yarn.job_order_id),
 
@@ -310,18 +314,15 @@ async function getJobById(db, id) {
 
         remarks:
           item.remarks || '',
-
-        createdAt:
-          item.created_at,
       })),
   };
 }
 
-// ============================================================
-// GET /api/jobs
-// JOB ORDER REGISTER
-// ============================================================
-
+/*
+ * GET /api/jobs
+ *
+ * Job Order Register
+ */
 router.get('/', async (req, res) => {
   try {
     const search =
@@ -345,15 +346,14 @@ router.get('/', async (req, res) => {
       conditions.push(`
         (
           j.job_no ILIKE ${parameter}
-          OR COALESCE(p.name, '') ILIKE ${parameter}
+          OR COALESCE(party.name, '') ILIKE ${parameter}
           OR COALESCE(j.fabric_name, '') ILIKE ${parameter}
           OR COALESCE(j.status, '') ILIKE ${parameter}
-          OR COALESCE(j.design_no, '') ILIKE ${parameter}
         )
       `);
     }
 
-    if (status && status.toLowerCase() !== 'all') {
+    if (status) {
       values.push(status);
 
       conditions.push(
@@ -381,9 +381,8 @@ router.get('/', async (req, res) => {
         j.job_no,
         j.job_date,
         j.party_id,
-
         COALESCE(
-          p.name,
+          party.name,
           ''
         ) AS party_name,
 
@@ -391,61 +390,64 @@ router.get('/', async (req, res) => {
         j.design_no,
         j.gsm,
         j.order_quantity,
-
-        COALESCE(
-          j.status,
-          'Open'
-        ) AS status,
-
+        j.status,
         j.stitch_length,
         j.notes,
         j.created_at,
         j.updated_at,
 
         COALESCE(
-          (
-            SELECT SUM(
-              jp.quantity_kg
-            )
-            FROM job_production jp
-            WHERE jp.job_order_id = j.id
-          ),
+          prod.produced_quantity,
           0
         ) AS produced_quantity,
 
         GREATEST(
-          j.order_quantity -
-          COALESCE(
-            (
-              SELECT SUM(
-                jp.quantity_kg
-              )
-              FROM job_production jp
-              WHERE jp.job_order_id = j.id
+          j.order_quantity
+          - COALESCE(
+              prod.produced_quantity,
+              0
             ),
-            0
-          ),
           0
         ) AS remaining_quantity,
 
         COALESCE(
-          (
-            SELECT ARRAY_AGG(
-              DISTINCT jom.machine_id
-            )
-            FROM job_order_machines jom
-            WHERE jom.job_order_id = j.id
-              AND jom.machine_id IS NOT NULL
+          ARRAY_AGG(
+            DISTINCT jom.machine_id
+          )
+          FILTER (
+            WHERE jom.machine_id IS NOT NULL
           ),
           ARRAY[]::bigint[]
         ) AS machine_ids
 
       FROM job_orders j
 
-      LEFT JOIN parties p
-        ON p.id = j.party_id
+      LEFT JOIN parties party
+        ON party.id = j.party_id
+
+      LEFT JOIN job_order_machines jom
+        ON jom.job_order_id = j.id
+
+      LEFT JOIN (
+        SELECT
+          job_order_id,
+          COALESCE(
+            SUM(quantity_kg),
+            0
+          ) AS produced_quantity
+
+        FROM job_production
+
+        GROUP BY job_order_id
+      ) prod
+        ON prod.job_order_id = j.id
 
       ${where}
+
+      GROUP BY
+        j.id,
+        party.name,
+        prod.produced_quantity
 
       ORDER BY
         j.job_date DESC NULLS LAST,
@@ -454,76 +456,78 @@ router.get('/', async (req, res) => {
       values,
     );
 
-    const jobs = result.rows.map((job) => {
-      const machineIds =
-        Array.isArray(job.machine_ids)
-          ? job.machine_ids
-              .map((id) => Number(id))
-              .filter((id) => id > 0)
-          : [];
-
-      return {
-        id: Number(job.id),
-
-        jobNo:
-          job.job_no || '',
-
-        jobDate:
-          job.job_date,
-
-        partyId:
-          job.party_id === null
-            ? null
-            : Number(job.party_id),
-
-        partyName:
-          job.party_name || '',
-
-        fabricName:
-          job.fabric_name || '',
-
-        designNo:
-          job.design_no || '',
-
-        gsm:
-          toNumber(job.gsm),
-
-        orderQuantity:
-          toNumber(job.order_quantity),
-
-        producedQuantity:
-          toNumber(job.produced_quantity),
-
-        remainingQuantity:
-          toNumber(job.remaining_quantity),
-
-        status:
-          job.status || 'Open',
-
-        stitchLength:
-          toNumber(job.stitch_length),
-
-        notes:
-          job.notes || '',
-
-        machineIds,
-
-        machineNumbers:
-          machineIds.length > 0
-            ? machineIds.join(', ')
-            : '',
-
-        createdAt:
-          job.created_at,
-
-        updatedAt:
-          job.updated_at,
-      };
-    });
-
     res.json({
       success: true,
-      jobs,
+
+      jobs: result.rows.map((job) => {
+        const machineIds =
+          Array.isArray(job.machine_ids)
+            ? job.machine_ids.map(
+                (machineId) =>
+                  Number(machineId),
+              )
+            : [];
+
+        return {
+          id: Number(job.id),
+
+          jobNo:
+            job.job_no || '',
+
+          jobDate:
+            job.job_date,
+
+          partyId:
+            job.party_id === null
+              ? null
+              : Number(job.party_id),
+
+          partyName:
+            job.party_name || '',
+
+          fabricName:
+            job.fabric_name || '',
+
+          designNo:
+            job.design_no || '',
+
+          gsm:
+            toNumber(job.gsm),
+
+          orderQuantity:
+            toNumber(
+              job.order_quantity,
+            ),
+
+          producedQuantity:
+            toNumber(
+              job.produced_quantity,
+            ),
+
+          remainingQuantity:
+            toNumber(
+              job.remaining_quantity,
+            ),
+
+          status:
+            job.status || 'Open',
+
+          stitchLength:
+            toNumber(
+              job.stitch_length,
+            ),
+
+          notes:
+            job.notes || '',
+
+          machineIds,
+
+          machineNumbers:
+            machineIds.length > 0
+              ? machineIds.join(', ')
+              : '',
+        };
+      }),
     });
   } catch (error) {
     console.error(
@@ -540,11 +544,157 @@ router.get('/', async (req, res) => {
   }
 });
 
-// ============================================================
-// GET /api/jobs/:id
-// COMPLETE JOB DETAILS
-// ============================================================
+/*
+ * POST /api/jobs/production-batch
+ *
+ * Saves multiple production rolls for multiple jobs in one transaction.
+ * Each entry must contain: job_id, machine_id, production_date, roll_no,
+ * quantity_kg and optional remarks.
+ */
+router.post('/production-batch', async (req, res) => {
+  const entries = Array.isArray(req.body?.entries)
+    ? req.body.entries
+    : [];
 
+  if (entries.length === 0) {
+    return res.status(400).json({
+      success: false,
+      error: 'At least one production roll is required',
+    });
+  }
+
+  const client = await pool.connect();
+
+  try {
+    await client.query('BEGIN');
+
+    const saved = [];
+
+    for (const raw of entries) {
+      const jobId = toNumber(raw?.job_id ?? raw?.jobId, 0);
+      const machineId = toNumber(
+        raw?.machine_id ?? raw?.machineId,
+        0,
+      );
+      const quantity = toNumber(
+        raw?.quantity_kg ?? raw?.quantityKg,
+        0,
+      );
+      const rollNo = cleanString(raw?.roll_no ?? raw?.rollNo);
+      const productionDate =
+        raw?.production_date ?? raw?.productionDate ?? null;
+      const remarks = cleanString(raw?.remarks);
+
+      if (!Number.isInteger(jobId) || jobId <= 0) {
+        throw new Error('Invalid job ID in production batch');
+      }
+
+      if (!Number.isInteger(machineId) || machineId <= 0) {
+        throw new Error('Invalid machine ID in production batch');
+      }
+
+      if (quantity <= 0) {
+        throw new Error(`Production quantity must be greater than 0 for roll ${rollNo || '(unnamed)'}`);
+      }
+
+      if (!rollNo) {
+        throw new Error('Roll number is required for every production entry');
+      }
+
+      const jobCheck = await client.query(
+        `
+        SELECT id
+        FROM job_orders
+        WHERE id = $1
+        FOR SHARE
+        `,
+        [jobId],
+      );
+
+      if (jobCheck.rows.length === 0) {
+        throw new Error(`Job order ${jobId} was not found`);
+      }
+
+      const machineCheck = await client.query(
+        `
+        SELECT id
+        FROM machines
+        WHERE id = $1
+        `,
+        [machineId],
+      );
+
+      if (machineCheck.rows.length === 0) {
+        throw new Error(`Machine ${machineId} was not found`);
+      }
+
+      const result = await client.query(
+        `
+        INSERT INTO job_production (
+          job_order_id,
+          machine_id,
+          production_date,
+          roll_no,
+          quantity_kg,
+          remarks
+        )
+        VALUES (
+          $1,
+          $2,
+          COALESCE($3::date, CURRENT_DATE),
+          $4,
+          $5,
+          $6
+        )
+        RETURNING
+          id,
+          job_order_id,
+          machine_id,
+          production_date,
+          roll_no,
+          quantity_kg,
+          remarks,
+          created_at
+        `,
+        [
+          jobId,
+          machineId,
+          productionDate,
+          rollNo,
+          quantity,
+          remarks || null,
+        ],
+      );
+
+      saved.push(result.rows[0]);
+    }
+
+    await client.query('COMMIT');
+
+    res.status(201).json({
+      success: true,
+      count: saved.length,
+      production: saved,
+    });
+  } catch (error) {
+    await client.query('ROLLBACK');
+
+    console.error('Add production batch failed:', error);
+
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Failed to add production batch',
+    });
+  } finally {
+    client.release();
+  }
+});
+
+/*
+ * GET /api/jobs/:id
+ *
+ * Complete Job Details
+ */
 router.get('/:id', async (req, res) => {
   const id =
     Number(req.params.id);
@@ -593,68 +743,14 @@ router.get('/:id', async (req, res) => {
   }
 });
 
-// ============================================================
-// GET /api/jobs/details/:id
-// COMPATIBILITY ENDPOINT FOR FLUTTER
-// ============================================================
-
-router.get(
-  '/details/:id',
-  async (req, res) => {
-    const id =
-      Number(req.params.id);
-
-    if (
-      !Number.isInteger(id) ||
-      id <= 0
-    ) {
-      return res.status(400).json({
-        success: false,
-        error: 'Invalid job ID',
-      });
-    }
-
-    try {
-      const job =
-        await getJobById(
-          pool,
-          id,
-        );
-
-      if (!job) {
-        return res.status(404).json({
-          success: false,
-          error:
-            'Job order not found',
-        });
-      }
-
-      res.json({
-        success: true,
-
-        ...job,
-      });
-    } catch (error) {
-      console.error(
-        'Get job details failed:',
-        error,
-      );
-
-      res.status(500).json({
-        success: false,
-        error:
-          error.message ||
-          'Failed to load job details',
-      });
-    }
-  },
-);
-
-// ============================================================
-// POST /api/jobs
-// CREATE JOB
-// ============================================================
-
+/*
+ * POST /api/jobs
+ *
+ * Creates:
+ *   job_orders
+ *   job_order_machines
+ *   job_order_yarns
+ */
 router.post('/', async (req, res) => {
   const {
     job_date,
@@ -767,6 +863,9 @@ router.post('/', async (req, res) => {
       );
     }
 
+    /*
+     * Generate next BBJO number.
+     */
     const sequenceResult =
       await client.query(`
         SELECT COALESCE(
@@ -785,6 +884,7 @@ router.post('/', async (req, res) => {
           ),
           0
         ) + 1 AS next_no
+
         FROM job_orders
       `);
 
@@ -813,6 +913,7 @@ router.post('/', async (req, res) => {
           stitch_length,
           notes
         )
+
         VALUES (
           $1,
           COALESCE(
@@ -831,6 +932,7 @@ router.post('/', async (req, res) => {
           $9,
           $10
         )
+
         RETURNING id
         `,
         [
@@ -871,10 +973,9 @@ router.post('/', async (req, res) => {
         jobResult.rows[0].id,
       );
 
-    // ========================================================
-    // MACHINES
-    // ========================================================
-
+    /*
+     * Machines
+     */
     for (
       const machineId
       of machineList
@@ -886,6 +987,7 @@ router.post('/', async (req, res) => {
             job_order_id,
             machine_id
           )
+
         VALUES ($1, $2)
         `,
         [
@@ -895,10 +997,9 @@ router.post('/', async (req, res) => {
       );
     }
 
-    // ========================================================
-    // YARNS
-    // ========================================================
-
+    /*
+     * Yarn requirements
+     */
     for (
       const yarn
       of yarnList
@@ -915,6 +1016,7 @@ router.post('/', async (req, res) => {
             returned_kg,
             waste_kg
           )
+
         VALUES (
           $1,
           $2,
@@ -980,11 +1082,9 @@ router.post('/', async (req, res) => {
   }
 });
 
-// ============================================================
-// PUT /api/jobs/:id
-// UPDATE JOB
-// ============================================================
-
+/*
+ * PUT /api/jobs/:id
+ */
 router.put('/:id', async (req, res) => {
   const id =
     Number(req.params.id);
@@ -1171,10 +1271,10 @@ router.put('/:id', async (req, res) => {
       ],
     );
 
-    // ========================================================
-    // MACHINES
-    // ========================================================
-
+    /*
+     * Replace machines only when
+     * machines were included.
+     */
     const machinesProvided =
       machines !== undefined ||
       machine_ids !== undefined ||
@@ -1193,6 +1293,7 @@ router.put('/:id', async (req, res) => {
         `
         DELETE FROM
           job_order_machines
+
         WHERE job_order_id = $1
         `,
         [id],
@@ -1209,6 +1310,7 @@ router.put('/:id', async (req, res) => {
               job_order_id,
               machine_id
             )
+
           VALUES ($1, $2)
           `,
           [
@@ -1219,10 +1321,10 @@ router.put('/:id', async (req, res) => {
       }
     }
 
-    // ========================================================
-    // YARNS
-    // ========================================================
-
+    /*
+     * Replace yarns only when
+     * yarns were included.
+     */
     if (yarns !== undefined) {
       const yarnList =
         normaliseYarns(yarns);
@@ -1231,6 +1333,7 @@ router.put('/:id', async (req, res) => {
         `
         DELETE FROM
           job_order_yarns
+
         WHERE job_order_id = $1
         `,
         [id],
@@ -1252,6 +1355,7 @@ router.put('/:id', async (req, res) => {
               returned_kg,
               waste_kg
             )
+
           VALUES (
             $1,
             $2,
@@ -1318,11 +1422,11 @@ router.put('/:id', async (req, res) => {
   }
 });
 
-// ============================================================
-// POST /api/jobs/:id/production
-// ADD PRODUCTION
-// ============================================================
-
+/*
+ * POST /api/jobs/:id/production
+ *
+ * Add production against a job.
+ */
 router.post(
   '/:id/production',
   async (req, res) => {
@@ -1402,6 +1506,7 @@ router.post(
             quantity_kg,
             remarks
           )
+
           VALUES (
             $1,
             $2,
@@ -1413,6 +1518,7 @@ router.post(
             $5,
             $6
           )
+
           RETURNING
             id,
             job_order_id,
@@ -1470,333 +1576,4 @@ router.post(
   },
 );
 
-// ============================================================
-// GET YARN HISTORY
-// ============================================================
-//
-// NOTE:
-// The current database schema does not contain a dedicated
-// yarn transaction/history table for jobs.
-// Therefore this returns the yarn requirements recorded
-// against the job.
-//
-
-router.get(
-  '/:jobNo/yarn-history',
-  async (req, res) => {
-    const jobNo =
-      cleanString(req.params.jobNo);
-
-    try {
-      const result =
-        await pool.query(
-          `
-          SELECT
-            joy.id,
-            'Requirement' AS transaction_type,
-            joy.required_kg AS quantity,
-            joy.created_at,
-            '' AS lot_no,
-            joy.yarn_name,
-            '' AS remarks
-          FROM job_order_yarns joy
-          INNER JOIN job_orders jo
-            ON jo.id =
-              joy.job_order_id
-          WHERE jo.job_no = $1
-          ORDER BY joy.id DESC
-          `,
-          [jobNo],
-        );
-
-      res.json(
-        result.rows.map((row) => ({
-          transaction_type:
-            row.transaction_type,
-
-          quantity:
-            toNumber(row.quantity),
-
-          created_at:
-            row.created_at,
-
-          lot_no:
-            row.lot_no || '',
-
-          yarn_name:
-            row.yarn_name || '',
-
-          remarks:
-            row.remarks || '',
-        })),
-      );
-    } catch (error) {
-      console.error(
-        'Get yarn history failed:',
-        error,
-      );
-
-      res.status(500).json({
-        success: false,
-        error:
-          error.message ||
-          'Failed to load yarn history',
-      });
-    }
-  },
-);
-
-// ============================================================
-// GET PRODUCTION HISTORY
-// ============================================================
-
-router.get(
-  '/:jobNo/production-history',
-  async (req, res) => {
-    const jobNo =
-      cleanString(req.params.jobNo);
-
-    try {
-      const result =
-        await pool.query(
-          `
-          SELECT
-            jp.roll_no,
-            jp.quantity_kg,
-            jp.created_at
-          FROM job_production jp
-          INNER JOIN job_orders jo
-            ON jo.id =
-              jp.job_order_id
-          WHERE jo.job_no = $1
-          ORDER BY
-            jp.production_date DESC NULLS LAST,
-            jp.id DESC
-          `,
-          [jobNo],
-        );
-
-      res.json(
-        result.rows.map((row) => ({
-          roll_no:
-            row.roll_no || '',
-
-          quantity:
-            toNumber(row.quantity_kg),
-
-          created_at:
-            row.created_at,
-        })),
-      );
-    } catch (error) {
-      console.error(
-        'Get production history failed:',
-        error,
-      );
-
-      res.status(500).json({
-        success: false,
-        error:
-          error.message ||
-          'Failed to load production history',
-      });
-    }
-  },
-);
-
-// ============================================================
-// PUT /api/jobs/close/:jobNo
-// CLOSE JOB
-// ============================================================
-
-router.put(
-  '/close/:jobNo',
-  async (req, res) => {
-    const jobNo =
-      cleanString(req.params.jobNo);
-
-    if (!jobNo) {
-      return res.status(400).json({
-        success: false,
-        error:
-          'Job number is required',
-      });
-    }
-
-    try {
-      const result =
-        await pool.query(
-          `
-          UPDATE job_orders
-
-          SET
-            status = 'Closed',
-            updated_at = NOW()
-
-          WHERE job_no = $1
-
-          RETURNING id
-          `,
-          [jobNo],
-        );
-
-      if (
-        result.rows.length === 0
-      ) {
-        return res.status(404).json({
-          success: false,
-          error:
-            'Job order not found',
-        });
-      }
-
-      res.json({
-        success: true,
-        message:
-          'Job closed successfully',
-      });
-    } catch (error) {
-      console.error(
-        'Close job failed:',
-        error,
-      );
-
-      res.status(500).json({
-        success: false,
-        error:
-          error.message ||
-          'Failed to close job',
-      });
-    }
-  },
-);
-
-// ============================================================
-// PUT /api/jobs/change-machine/:jobId
-// CHANGE MACHINE
-// ============================================================
-
-router.put(
-  '/change-machine/:jobId',
-  async (req, res) => {
-    const jobId =
-      Number(req.params.jobId);
-
-    const newMachineId =
-      toNumber(
-        req.body?.new_machine_id ??
-          req.body?.newMachineId,
-        0,
-      );
-
-    if (
-      !Number.isInteger(jobId) ||
-      jobId <= 0
-    ) {
-      return res.status(400).json({
-        success: false,
-        error:
-          'Invalid job ID',
-      });
-    }
-
-    if (newMachineId <= 0) {
-      return res.status(400).json({
-        success: false,
-        error:
-          'new_machine_id is required',
-      });
-    }
-
-    const client =
-      await pool.connect();
-
-    try {
-      await client.query(
-        'BEGIN',
-      );
-
-      const jobCheck =
-        await client.query(
-          `
-          SELECT id
-          FROM job_orders
-          WHERE id = $1
-          `,
-          [jobId],
-        );
-
-      if (
-        jobCheck.rows.length === 0
-      ) {
-        await client.query(
-          'ROLLBACK',
-        );
-
-        return res.status(404).json({
-          success: false,
-          error:
-            'Job order not found',
-        });
-      }
-
-      await client.query(
-        `
-        DELETE FROM
-          job_order_machines
-        WHERE job_order_id = $1
-        `,
-        [jobId],
-      );
-
-      await client.query(
-        `
-        INSERT INTO
-          job_order_machines (
-            job_order_id,
-            machine_id
-          )
-        VALUES ($1, $2)
-        `,
-        [
-          jobId,
-          newMachineId,
-        ],
-      );
-
-      await client.query(
-        'COMMIT',
-      );
-
-      res.json({
-        success: true,
-        message:
-          'Job machine changed successfully',
-      });
-    } catch (error) {
-      await client.query(
-        'ROLLBACK',
-      );
-
-      console.error(
-        'Change job machine failed:',
-        error,
-      );
-
-      res.status(500).json({
-        success: false,
-        error:
-          error.message ||
-          'Failed to change job machine',
-      });
-    } finally {
-      client.release();
-    }
-  },
-);
-
-// ============================================================
-// EXPORT
-// ============================================================
-
-module.exports = router; 
+module.exports = router;

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import 'app_theme.dart';
 import 'dashboard_screen.dart';
 import 'parties_screen.dart';
 import 'yarn_screen.dart';
@@ -20,188 +21,13 @@ class BBJOMSApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'BBJOMS',
+      title: 'BBJOMS — B&B KnitFab',
       debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        brightness: Brightness.dark,
-        scaffoldBackgroundColor: const Color(0xFF0B1117),
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: const Color(0xFF00BFA6),
-          brightness: Brightness.dark,
-        ),
-        useMaterial3: true,
-        fontFamily: 'Arial',
-      ),
+      theme: BBTheme.dark(),
       home: const BBJOMSShell(),
     );
   }
 }
-
-// ============================================================
-// RESPONSIVE BREAKPOINTS
-// ============================================================
-//
-// < 600       Phone
-// 600 - 899   Tablet / iPad
-// 900 - 1199  Small desktop
-// 1200 - 1599 Desktop
-// 1600 - 2399 Large desktop
-// 2400+       TV / very large display
-//
-// ============================================================
-
-class BBJOMSBreakpoints {
-  static const double phone = 600;
-  static const double tablet = 900;
-  static const double desktop = 1200;
-  static const double largeDesktop = 1600;
-  static const double tv = 2400;
-}
-
-class BBJOMSResponsive {
-  static double width(BuildContext context) {
-    return MediaQuery.sizeOf(context).width;
-  }
-
-  static double height(BuildContext context) {
-    return MediaQuery.sizeOf(context).height;
-  }
-
-  static bool isPhone(BuildContext context) {
-    return width(context) < BBJOMSBreakpoints.phone;
-  }
-
-  static bool isTablet(BuildContext context) {
-    final w = width(context);
-    return w >= BBJOMSBreakpoints.phone &&
-        w < BBJOMSBreakpoints.tablet;
-  }
-
-  static bool isSmallDesktop(BuildContext context) {
-    final w = width(context);
-    return w >= BBJOMSBreakpoints.tablet &&
-        w < BBJOMSBreakpoints.desktop;
-  }
-
-  static bool isDesktop(BuildContext context) {
-    final w = width(context);
-    return w >= BBJOMSBreakpoints.desktop &&
-        w < BBJOMSBreakpoints.largeDesktop;
-  }
-
-  static bool isLargeDesktop(BuildContext context) {
-    final w = width(context);
-    return w >= BBJOMSBreakpoints.largeDesktop &&
-        w < BBJOMSBreakpoints.tv;
-  }
-
-  static bool isTv(BuildContext context) {
-    return width(context) >= BBJOMSBreakpoints.tv;
-  }
-
-  static bool useMobileNavigation(BuildContext context) {
-    return isPhone(context);
-  }
-
-  static bool useCompactSidebar(BuildContext context) {
-    final w = width(context);
-
-    return w >= BBJOMSBreakpoints.phone &&
-        w < BBJOMSBreakpoints.desktop;
-  }
-
-  static bool useFullSidebar(BuildContext context) {
-    return width(context) >= BBJOMSBreakpoints.desktop;
-  }
-
-  static double sidebarWidth(BuildContext context) {
-    if (isPhone(context)) {
-      return 0;
-    }
-
-    if (useCompactSidebar(context)) {
-      return 76;
-    }
-
-    if (isTv(context)) {
-      return 260;
-    }
-
-    if (isLargeDesktop(context)) {
-      return 245;
-    }
-
-    return 235;
-  }
-
-  static double contentHorizontalPadding(BuildContext context) {
-    final w = width(context);
-
-    if (w < 600) {
-      return 12;
-    }
-
-    if (w < 900) {
-      return 16;
-    }
-
-    if (w < 1200) {
-      return 20;
-    }
-
-    if (w < 1600) {
-      return 24;
-    }
-
-    if (w < 2400) {
-      return 32;
-    }
-
-    return 48;
-  }
-
-  static double topBarHeight(BuildContext context) {
-    if (isPhone(context)) {
-      return 60;
-    }
-
-    if (isTv(context)) {
-      return 76;
-    }
-
-    return 68;
-  }
-
-  static double scale(BuildContext context) {
-    final w = width(context);
-
-    if (w < 600) {
-      return 0.90;
-    }
-
-    if (w < 900) {
-      return 0.95;
-    }
-
-    if (w < 1200) {
-      return 1.0;
-    }
-
-    if (w < 1600) {
-      return 1.0;
-    }
-
-    if (w < 2400) {
-      return 1.05;
-    }
-
-    return 1.10;
-  }
-}
-
-// ============================================================
-// APP SHELL
-// ============================================================
 
 class BBJOMSShell extends StatefulWidget {
   const BBJOMSShell({super.key});
@@ -261,51 +87,55 @@ class _BBJOMSShellState extends State<BBJOMSShell> {
     ),
   ];
 
-  void _selectPage(int index) {
-    setState(() {
-      _selectedIndex = index;
-    });
-  }
-
   @override
   Widget build(BuildContext context) {
-    final bool mobile =
-        BBJOMSResponsive.useMobileNavigation(context);
+    final width = MediaQuery.sizeOf(context).width;
+    final mobile = width < 850;
+    final compact = width < 1100;
 
     if (mobile) {
       return Scaffold(
-        body: SafeArea(
-          bottom: false,
-          child: Column(
+        backgroundColor: BBTheme.canvas,
+        appBar: AppBar(
+          titleSpacing: 16,
+          title: Row(
             children: [
-              Expanded(
-                child: Column(
-                  children: [
-                    _buildMobileTopBar(),
-                    Expanded(
-                      child: _buildPage(),
-                    ),
-                  ],
+              Image.asset(
+                'assets/logo.png',
+                width: 34,
+                height: 34,
+                fit: BoxFit.contain,
+                errorBuilder: (_, __, ___) => const Icon(
+                  Icons.factory,
+                  color: BBTheme.red,
                 ),
               ),
-              _buildBottomNavigation(),
+              const SizedBox(width: 10),
+              const Text(
+                'B&B KnitFab',
+                style: TextStyle(
+                  fontWeight: FontWeight.w800,
+                  fontSize: 21,
+                ),
+              ),
             ],
           ),
         ),
+        drawer: _buildMobileDrawer(),
+        body: _buildPage(),
       );
     }
 
     return Scaffold(
+      backgroundColor: BBTheme.canvas,
       body: Row(
         children: [
-          _buildSidebar(),
+          _buildSidebar(compact),
           Expanded(
             child: Column(
               children: [
                 _buildTopBar(),
-                Expanded(
-                  child: _buildPage(),
-                ),
+                Expanded(child: _buildPage()),
               ],
             ),
           ),
@@ -314,501 +144,363 @@ class _BBJOMSShellState extends State<BBJOMSShell> {
     );
   }
 
-  // ============================================================
-  // SIDEBAR
-  // ============================================================
-
-  Widget _buildSidebar() {
-    final bool compact =
-        BBJOMSResponsive.useCompactSidebar(context);
-
-    final double sidebarWidth =
-        BBJOMSResponsive.sidebarWidth(context);
-
+  Widget _buildSidebar(bool compact) {
     return Container(
-      width: sidebarWidth,
-      decoration: const BoxDecoration(
-        color: Color(0xFF101820),
-        border: Border(
-          right: BorderSide(
-            color: Color(0xFF1D2933),
-          ),
-        ),
-      ),
-      child: Column(
-        children: [
-          SizedBox(
-            height:
-                BBJOMSResponsive.isTv(context) ? 28 : 22,
-          ),
-
-          Padding(
-            padding: EdgeInsets.symmetric(
-              horizontal: compact ? 12 : 20,
+      width: compact ? 88 : 260,
+      color: BBTheme.black,
+      child: SafeArea(
+        child: Column(
+          children: [
+            const SizedBox(height: 12),
+            Padding(
+              padding: EdgeInsets.symmetric(
+                horizontal: compact ? 12 : 18,
+              ),
+              child: compact
+                  ? Image.asset(
+                      'assets/logo.png',
+                      width: 48,
+                      height: 48,
+                      fit: BoxFit.contain,
+                      errorBuilder: (_, __, ___) => const Icon(
+                        Icons.factory,
+                        color: BBTheme.redLight,
+                        size: 32,
+                      ),
+                    )
+                  : Row(
+                      children: [
+                        Image.asset(
+                          'assets/logo.png',
+                          width: 58,
+                          height: 58,
+                          fit: BoxFit.contain,
+                          errorBuilder: (_, __, ___) => const Icon(
+                            Icons.factory,
+                            color: BBTheme.redLight,
+                            size: 32,
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        const Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'B&B KnitFab',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 24,
+                                  fontWeight: FontWeight.w900,
+                                ),
+                              ),
+                              SizedBox(height: 2),
+                              Text(
+                                'ERP SYSTEM',
+                                style: TextStyle(
+                                  color: Color(0xFFB8B8B8),
+                                  fontSize: 10,
+                                  letterSpacing: 1.8,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
             ),
-            child: Row(
-              mainAxisAlignment: compact
-                  ? MainAxisAlignment.center
-                  : MainAxisAlignment.start,
-              children: [
-                Container(
-                  width: 38,
-                  height: 38,
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF00BFA6),
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: const Icon(
-                    Icons.factory,
-                    color: Colors.white,
-                    size: 22,
-                  ),
+            const SizedBox(height: 18),
+            Container(
+              height: 1,
+              margin: const EdgeInsets.symmetric(horizontal: 18),
+              color: BBTheme.black3,
+            ),
+            const SizedBox(height: 18),
+            Expanded(
+              child: ListView.builder(
+                padding: const EdgeInsets.symmetric(horizontal: 10),
+                itemCount: _navigationItems.length,
+                itemBuilder: (context, index) {
+                  final item = _navigationItems[index];
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 5),
+                    child: _SidebarItem(
+                      item: item,
+                      selected: index == _selectedIndex,
+                      compact: compact,
+                      onTap: () {
+                        setState(() => _selectedIndex = index);
+                      },
+                    ),
+                  );
+                },
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(12, 8, 12, 14),
+              child: Container(
+                padding: EdgeInsets.all(compact ? 8 : 11),
+                decoration: BoxDecoration(
+                  color: BBTheme.black2,
+                  borderRadius: BorderRadius.circular(5),
+                  border: Border.all(color: BBTheme.black3),
                 ),
-
-                if (!compact) ...[
-                  const SizedBox(width: 12),
-                  Text(
-                    'BBJOMS',
-                    style: TextStyle(
-                      fontSize:
-                          BBJOMSResponsive.isTv(context)
-                              ? 21
-                              : 20,
-                      fontWeight: FontWeight.w700,
-                      letterSpacing: 0.5,
-                    ),
-                  ),
-                ],
-              ],
-            ),
-          ),
-
-          const SizedBox(height: 32),
-
-          Expanded(
-            child: ListView.builder(
-              padding: const EdgeInsets.symmetric(
-                horizontal: 10,
+                child: compact
+                    ? const Icon(
+                        Icons.person_outline,
+                        color: Colors.white70,
+                        size: 21,
+                      )
+                    : const Row(
+                        children: [
+                          CircleAvatar(
+                            radius: 17,
+                            backgroundColor: BBTheme.red,
+                            child: Text(
+                              'A',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                          ),
+                          SizedBox(width: 10),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Admin',
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.w700,
+                                    fontSize: 14,
+                                  ),
+                                ),
+                                SizedBox(height: 2),
+                                Text(
+                                  'Administrator',
+                                  style: TextStyle(
+                                    color: Color(0xFF929292),
+                                    fontSize: 12,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          Icon(
+                            Icons.more_vert,
+                            color: Color(0xFF858585),
+                            size: 18,
+                          ),
+                        ],
+                      ),
               ),
-              itemCount: _navigationItems.length,
-              itemBuilder: (context, index) {
-                final item = _navigationItems[index];
-                final selected =
-                    index == _selectedIndex;
-
-                return Padding(
-                  padding: const EdgeInsets.only(
-                    bottom: 4,
-                  ),
-                  child: _SidebarItem(
-                    item: item,
-                    selected: selected,
-                    compact: compact,
-                    onTap: () {
-                      _selectPage(index);
-                    },
-                  ),
-                );
-              },
-            ),
-          ),
-
-          _buildUserPanel(compact),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildUserPanel(bool compact) {
-    return Container(
-      margin: const EdgeInsets.all(12),
-      padding: EdgeInsets.all(
-        compact ? 8 : 12,
-      ),
-      decoration: BoxDecoration(
-        color: const Color(0xFF151F28),
-        borderRadius: BorderRadius.circular(10),
-      ),
-      child: Row(
-        mainAxisAlignment: compact
-            ? MainAxisAlignment.center
-            : MainAxisAlignment.start,
-        children: [
-          CircleAvatar(
-            radius: 17,
-            backgroundColor:
-                const Color(0xFF00BFA6),
-            child: const Text(
-              'C',
-              style: TextStyle(
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-          ),
-
-          if (!compact) ...[
-            const SizedBox(width: 10),
-
-            const Expanded(
-              child: Column(
-                crossAxisAlignment:
-                    CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Admin',
-                    style: TextStyle(
-                      fontWeight: FontWeight.w600,
-                      fontSize: 13,
-                    ),
-                  ),
-                  SizedBox(height: 2),
-                  Text(
-                    'Administrator',
-                    style: TextStyle(
-                      color: Color(0xFF84919D),
-                      fontSize: 11,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-
-            const Icon(
-              Icons.more_vert,
-              size: 18,
-              color: Color(0xFF84919D),
             ),
           ],
-        ],
+        ),
       ),
     );
   }
 
-  // ============================================================
-  // DESKTOP TOP BAR
-  // ============================================================
-
-  Widget _buildTopBar() {
-    final bool compact =
-        BBJOMSResponsive.useCompactSidebar(context);
-
-    final bool smallWidth =
-        MediaQuery.sizeOf(context).width < 1100;
-
-    return Container(
-      height:
-          BBJOMSResponsive.topBarHeight(context),
-      padding: EdgeInsets.symmetric(
-        horizontal:
-            BBJOMSResponsive.contentHorizontalPadding(
-          context,
+  Widget _buildMobileDrawer() {
+    return Drawer(
+      backgroundColor: BBTheme.black,
+      child: SafeArea(
+        child: Column(
+          children: [
+            const SizedBox(height: 18),
+            Image.asset(
+              'assets/logo.png',
+              width: 82,
+              height: 82,
+              fit: BoxFit.contain,
+              errorBuilder: (_, __, ___) => const Icon(
+                Icons.factory,
+                color: BBTheme.redLight,
+                size: 48,
+              ),
+            ),
+            const SizedBox(height: 8),
+            const Text(
+              'B&B KnitFab',
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 22,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+            const SizedBox(height: 4),
+            const Text(
+              'ERP SYSTEM',
+              style: TextStyle(
+                color: Color(0xFF9A9A9A),
+                fontSize: 12,
+                letterSpacing: 2,
+              ),
+            ),
+            const SizedBox(height: 24),
+            Expanded(
+              child: ListView.builder(
+                itemCount: _navigationItems.length,
+                itemBuilder: (_, index) {
+                  final item = _navigationItems[index];
+                  final selected = index == _selectedIndex;
+                  return ListTile(
+                    leading: Icon(
+                      selected ? item.selectedIcon : item.icon,
+                      color: selected ? BBTheme.redLight : Colors.white60,
+                    ),
+                    title: Text(
+                      item.label,
+                      style: TextStyle(
+                        color: selected ? Colors.white : Colors.white70,
+                        fontWeight:
+                            selected ? FontWeight.w700 : FontWeight.w400,
+                      ),
+                    ),
+                    selected: selected,
+                    selectedTileColor: const Color(0x24C62828),
+                    onTap: () {
+                      setState(() => _selectedIndex = index);
+                      Navigator.pop(context);
+                    },
+                  );
+                },
+              ),
+            ),
+          ],
         ),
       ),
+    );
+  }
+
+  Widget _buildTopBar() {
+    return Container(
+      height: 76,
+      padding: const EdgeInsets.symmetric(horizontal: 24),
       decoration: const BoxDecoration(
-        color: Color(0xFF0F171E),
+        color: BBTheme.black2,
         border: Border(
-          bottom: BorderSide(
-            color: Color(0xFF1D2933),
-          ),
+          bottom: BorderSide(color: BBTheme.border),
         ),
       ),
       child: Row(
         children: [
           Text(
             _navigationItems[_selectedIndex].label,
+            style: const TextStyle(
+              color: BBTheme.text,
+              fontSize: 22,
+              fontWeight: FontWeight.w900,
+              letterSpacing: -.2,
+            ),
+          ),
+          const SizedBox(width: 10),
+          Container(
+            padding: const EdgeInsets.symmetric(
+              horizontal: 8,
+              vertical: 4,
+            ),
+            decoration: BoxDecoration(
+              color: const Color(0x33B4232C),
+              borderRadius: BorderRadius.circular(5),
+            ),
+            child: const Text(
+              'B&B KNITFAB',
+              style: TextStyle(
+                color: BBTheme.red,
+                fontSize: 10,
+                fontWeight: FontWeight.w800,
+                letterSpacing: .8,
+              ),
+            ),
+          ),
+          const Spacer(),
+          Container(
+            width: 250,
+            height: 38,
+            decoration: BoxDecoration(
+              color: BBTheme.black3,
+              borderRadius: BorderRadius.circular(5),
+              border: Border.all(color: BBTheme.border),
+            ),
+            child: const Row(
+              children: [
+                SizedBox(width: 12),
+                Icon(
+                  Icons.search,
+                  size: 18,
+                  color: BBTheme.subtle,
+                ),
+                SizedBox(width: 8),
+                Text(
+                  'SEARCH...',
+                  style: TextStyle(
+                    color: BBTheme.subtle,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: .8,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 12),
+          IconButton(
+            onPressed: () {},
+            tooltip: 'Notifications',
+            icon: const Icon(
+              Icons.notifications_none,
+              color: BBTheme.muted,
+            ),
+          ),
+          const SizedBox(width: 6),
+          Container(
+            width: 1,
+            height: 28,
+            color: BBTheme.border,
+          ),
+          const SizedBox(width: 16),
+          const Text(
+            'B&B KnitFab',
             style: TextStyle(
-              fontSize:
-                  BBJOMSResponsive.isTv(context)
-                      ? 23
-                      : 21,
+              color: BBTheme.muted,
+              fontSize: 14,
               fontWeight: FontWeight.w600,
             ),
           ),
-
-          const Spacer(),
-
-          if (!smallWidth)
-            _buildSearchBox(),
-
-          if (!smallWidth)
-            const SizedBox(width: 16),
-
-          IconButton(
-            onPressed: () {},
-            icon: const Icon(
-              Icons.notifications_none,
-            ),
-            tooltip: 'Notifications',
-          ),
-
-          if (!compact) ...[
-            const SizedBox(width: 8),
-
-            Container(
-              width: 1,
-              height: 28,
-              color: const Color(0xFF25313B),
-            ),
-
-            const SizedBox(width: 16),
-
-            if (!BBJOMSResponsive.isTablet(context))
-              const Text(
-                'B&B KnitFab',
-                style: TextStyle(
-                  color: Color(0xFF9BA7B2),
-                  fontSize: 13,
-                ),
-              ),
-          ],
         ],
       ),
     );
   }
-
-  Widget _buildSearchBox() {
-    final double width =
-        BBJOMSResponsive.isTv(context)
-            ? 300
-            : BBJOMSResponsive.isLargeDesktop(context)
-                ? 260
-                : 220;
-
-    return Container(
-      width: width,
-      height: 38,
-      decoration: BoxDecoration(
-        color: const Color(0xFF151F28),
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(
-          color: const Color(0xFF25313B),
-        ),
-      ),
-      child: const Row(
-        children: [
-          SizedBox(width: 12),
-          Icon(
-            Icons.search,
-            size: 18,
-            color: Color(0xFF71808D),
-          ),
-          SizedBox(width: 8),
-          Text(
-            'Search...',
-            style: TextStyle(
-              color: Color(0xFF71808D),
-              fontSize: 13,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // ============================================================
-  // MOBILE TOP BAR
-  // ============================================================
-
-  Widget _buildMobileTopBar() {
-    return Container(
-      height: 60,
-      padding: const EdgeInsets.symmetric(
-        horizontal: 12,
-      ),
-      decoration: const BoxDecoration(
-        color: Color(0xFF0F171E),
-        border: Border(
-          bottom: BorderSide(
-            color: Color(0xFF1D2933),
-          ),
-        ),
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 34,
-            height: 34,
-            decoration: BoxDecoration(
-              color: const Color(0xFF00BFA6),
-              borderRadius: BorderRadius.circular(9),
-            ),
-            child: const Icon(
-              Icons.factory,
-              color: Colors.white,
-              size: 19,
-            ),
-          ),
-
-          const SizedBox(width: 10),
-
-          Expanded(
-            child: Text(
-              _navigationItems[_selectedIndex].label,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ),
-
-          IconButton(
-            onPressed: () {},
-            icon: const Icon(
-              Icons.search,
-              size: 21,
-            ),
-          ),
-
-          IconButton(
-            onPressed: () {},
-            icon: const Icon(
-              Icons.notifications_none,
-              size: 21,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // ============================================================
-  // MOBILE BOTTOM NAVIGATION
-  // ============================================================
-
-  Widget _buildBottomNavigation() {
-    return Container(
-      height: 68,
-      decoration: const BoxDecoration(
-        color: Color(0xFF101820),
-        border: Border(
-          top: BorderSide(
-            color: Color(0xFF1D2933),
-          ),
-        ),
-      ),
-      child: SafeArea(
-        top: false,
-        child: Row(
-          mainAxisAlignment:
-              MainAxisAlignment.spaceAround,
-          children: [
-            _MobileNavButton(
-              item: _navigationItems[0],
-              selected: _selectedIndex == 0,
-              onTap: () => _selectPage(0),
-            ),
-
-            _MobileNavButton(
-              item: _navigationItems[1],
-              selected: _selectedIndex == 1,
-              onTap: () => _selectPage(1),
-            ),
-
-            _MobileNavButton(
-              item: _navigationItems[2],
-              selected: _selectedIndex == 2,
-              onTap: () => _selectPage(2),
-            ),
-
-            _MobileNavButton(
-              item: _navigationItems[3],
-              selected: _selectedIndex == 3,
-              onTap: () => _selectPage(3),
-            ),
-
-            PopupMenuButton<int>(
-              icon: const Icon(
-                Icons.more_horiz,
-                color: Color(0xFF7C8995),
-              ),
-              onSelected: _selectPage,
-              itemBuilder: (context) {
-                return List.generate(
-                  _navigationItems.length - 4,
-                  (index) {
-                    final actualIndex = index + 4;
-                    final item =
-                        _navigationItems[actualIndex];
-
-                    return PopupMenuItem<int>(
-                      value: actualIndex,
-                      child: Row(
-                        children: [
-                          Icon(
-                            item.icon,
-                            size: 20,
-                          ),
-                          const SizedBox(width: 12),
-                          Text(item.label),
-                        ],
-                      ),
-                    );
-                  },
-                );
-              },
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  // ============================================================
-  // PAGE CONTENT
-  // ============================================================
 
   Widget _buildPage() {
-    return ClipRect(
-      child: Padding(
-        padding: EdgeInsets.symmetric(
-          horizontal:
-              BBJOMSResponsive
-                  .contentHorizontalPadding(context),
-        ),
-        child: _buildSelectedPage(),
-      ),
-    );
-  }
-
-  Widget _buildSelectedPage() {
     switch (_selectedIndex) {
       case 0:
         return const DashboardPage();
-
       case 1:
         return const PartiesPage();
-
       case 2:
         return const YarnPage();
-
       case 3:
         return const JobOrdersPage();
-
       case 4:
         return const ProductionPage();
-
       case 5:
         return const MachinesPage();
-
       case 6:
         return const FabricPage();
-
       case 7:
         return const InventoryPage();
-
       case 8:
         return const ReportsPage();
-
       default:
         return const DashboardPage();
     }
   }
 }
-
-// ============================================================
-// SIDEBAR ITEM
-// ============================================================
 
 class _SidebarItem extends StatelessWidget {
   final _NavigationItem item;
@@ -827,126 +519,52 @@ class _SidebarItem extends StatelessWidget {
   Widget build(BuildContext context) {
     return Tooltip(
       message: compact ? item.label : '',
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(8),
-        child: Container(
-          height: 44,
-          padding: EdgeInsets.symmetric(
-            horizontal: compact ? 0 : 12,
-          ),
-          decoration: BoxDecoration(
-            color: selected
-                ? const Color(0xFF00BFA6)
-                    .withValues(alpha: 0.12)
-                : Colors.transparent,
-            borderRadius: BorderRadius.circular(8),
-          ),
-          child: Row(
-            mainAxisAlignment: compact
-                ? MainAxisAlignment.center
-                : MainAxisAlignment.start,
-            children: [
-              Icon(
-                selected
-                    ? item.selectedIcon
-                    : item.icon,
-                size: 20,
-                color: selected
-                    ? const Color(0xFF00BFA6)
-                    : const Color(0xFF7C8995),
-              ),
-
-              if (!compact) ...[
-                const SizedBox(width: 12),
-
-                Expanded(
-                  child: Text(
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(5),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 150),
+            height: 50,
+            padding: EdgeInsets.symmetric(
+              horizontal: compact ? 0 : 12,
+            ),
+            decoration: BoxDecoration(
+              color: selected ? BBTheme.red : Colors.transparent,
+              borderRadius: BorderRadius.circular(6),
+              border: selected ? null : null,
+            ),
+            child: Row(
+              mainAxisAlignment: compact
+                  ? MainAxisAlignment.center
+                  : MainAxisAlignment.start,
+              children: [
+                Icon(
+                  selected ? item.selectedIcon : item.icon,
+                  size: 20,
+                  color: selected ? Colors.white : const Color(0xFF9A9A9A),
+                ),
+                if (!compact) ...[
+                  const SizedBox(width: 12),
+                  Text(
                     item.label,
-                    overflow: TextOverflow.ellipsis,
                     style: TextStyle(
-                      color: selected
-                          ? const Color(0xFFE8F2F0)
-                          : const Color(0xFF9BA7B2),
-                      fontSize: 13,
-                      fontWeight: selected
-                          ? FontWeight.w600
-                          : FontWeight.w400,
+                      color: selected ? Colors.white : const Color(0xFFB5B5B5),
+                      fontSize: 15,
+                      fontWeight: selected ? FontWeight.w900 : FontWeight.w700,
+                      letterSpacing: .15,
                     ),
                   ),
-                ),
+                ],
               ],
-            ],
+            ),
           ),
         ),
       ),
     );
   }
 }
-
-// ============================================================
-// MOBILE NAV BUTTON
-// ============================================================
-
-class _MobileNavButton extends StatelessWidget {
-  final _NavigationItem item;
-  final bool selected;
-  final VoidCallback onTap;
-
-  const _MobileNavButton({
-    required this.item,
-    required this.selected,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(12),
-      child: SizedBox(
-        width: 58,
-        height: 58,
-        child: Column(
-          mainAxisAlignment:
-              MainAxisAlignment.center,
-          children: [
-            Icon(
-              selected
-                  ? item.selectedIcon
-                  : item.icon,
-              size: 21,
-              color: selected
-                  ? const Color(0xFF00BFA6)
-                  : const Color(0xFF7C8995),
-            ),
-
-            const SizedBox(height: 3),
-
-            Text(
-              item.label,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                fontSize: 9,
-                color: selected
-                    ? const Color(0xFF00BFA6)
-                    : const Color(0xFF7C8995),
-                fontWeight: selected
-                    ? FontWeight.w600
-                    : FontWeight.w400,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-// ============================================================
-// NAVIGATION MODEL
-// ============================================================
 
 class _NavigationItem {
   final IconData icon;

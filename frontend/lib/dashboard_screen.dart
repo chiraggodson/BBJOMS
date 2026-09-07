@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'app_theme.dart';
 
 class DashboardPage extends StatelessWidget {
   const DashboardPage({super.key});
@@ -6,226 +7,58 @@ class DashboardPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SingleChildScrollView(
-      padding: const EdgeInsets.all(28),
+      padding: const EdgeInsets.fromLTRB(26, 24, 26, 34),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Header
-          const Text(
-            'Good afternoon',
-            style: TextStyle(
-              color: Color(0xFF8B98A5),
-              fontSize: 14,
-            ),
-          ),
-          const SizedBox(height: 5),
-          const Text(
-            'Factory Overview',
-            style: TextStyle(
-              fontSize: 28,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-
-          const SizedBox(height: 28),
-
-          // KPI cards
-          LayoutBuilder(
-            builder: (context, constraints) {
-              final width = constraints.maxWidth;
-
-              if (width < 750) {
-                return const Column(
-                  children: [
-                    _KpiCard(
-                      title: 'Active Jobs',
-                      value: '12',
-                      subtitle: '3 need attention',
-                      icon: Icons.assignment_outlined,
-                    ),
-                    SizedBox(height: 12),
-                    _KpiCard(
-                      title: 'Production Today',
-                      value: '1,284 kg',
-                      subtitle: '+8.4% vs yesterday',
-                      icon: Icons.trending_up,
-                    ),
-                    SizedBox(height: 12),
-                    _KpiCard(
-                      title: 'Yarn Stock',
-                      value: '8,462 kg',
-                      subtitle: '24 lots available',
-                      icon: Icons.inventory_2_outlined,
-                    ),
-                    SizedBox(height: 12),
-                    _KpiCard(
-                      title: 'Machines Running',
-                      value: '27 / 31',
-                      subtitle: '87% utilisation',
-                      icon: Icons.precision_manufacturing_outlined,
-                    ),
-                  ],
-                );
-              }
-
-              return const Row(
-                children: [
-                  Expanded(
-                    child: _KpiCard(
-                      title: 'Active Jobs',
-                      value: '12',
-                      subtitle: '3 need attention',
-                      icon: Icons.assignment_outlined,
-                    ),
-                  ),
-                  SizedBox(width: 14),
-                  Expanded(
-                    child: _KpiCard(
-                      title: 'Production Today',
-                      value: '1,284 kg',
-                      subtitle: '+8.4% vs yesterday',
-                      icon: Icons.trending_up,
-                    ),
-                  ),
-                  SizedBox(width: 14),
-                  Expanded(
-                    child: _KpiCard(
-                      title: 'Yarn Stock',
-                      value: '8,462 kg',
-                      subtitle: '24 lots available',
-                      icon: Icons.inventory_2_outlined,
-                    ),
-                  ),
-                  SizedBox(width: 14),
-                  Expanded(
-                    child: _KpiCard(
-                      title: 'Machines Running',
-                      value: '27 / 31',
-                      subtitle: '87% utilisation',
-                      icon: Icons.precision_manufacturing_outlined,
-                    ),
-                  ),
-                ],
-              );
-            },
-          ),
-
-          const SizedBox(height: 28),
-
-          // Main content
-          LayoutBuilder(
-            builder: (context, constraints) {
-              if (constraints.maxWidth < 1000) {
-                return const Column(
-                  children: [
-                    _RecentJobsCard(),
-                    SizedBox(height: 20),
-                    _MachineStatusCard(),
-                  ],
-                );
-              }
-
-              return const Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Expanded(
-                    flex: 3,
-                    child: _RecentJobsCard(),
-                  ),
-                  SizedBox(width: 20),
-                  Expanded(
-                    flex: 2,
-                    child: _MachineStatusCard(),
-                  ),
-                ],
-              );
-            },
-          ),
-
-          const SizedBox(height: 28),
-
-          // Quick actions
-          const _QuickActionsCard(),
+        children: const [
+          _Hero(),
+          SizedBox(height: 20),
+          _Kpis(),
+          SizedBox(height: 20),
+          _OperationsGrid(),
+          SizedBox(height: 20),
+          _Attention(),
         ],
       ),
     );
   }
 }
 
-class _KpiCard extends StatelessWidget {
-  final String title;
-  final String value;
-  final String subtitle;
-  final IconData icon;
-
-  const _KpiCard({
-    required this.title,
-    required this.value,
-    required this.subtitle,
-    required this.icon,
-  });
-
+class _Hero extends StatelessWidget {
+  const _Hero();
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.fromLTRB(20, 18, 20, 18),
       decoration: BoxDecoration(
-        color: const Color(0xFF111A22),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: const Color(0xFF1E2A34),
-        ),
+        color: BBTheme.panel,
+        border: Border.all(color: BBTheme.border),
+        borderRadius: BorderRadius.circular(7),
       ),
       child: Row(
         children: [
-          Container(
-            width: 44,
-            height: 44,
-            decoration: BoxDecoration(
-              color: const Color(0xFF00BFA6).withValues(alpha: 0.12),
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: const Icon(
-              Icons.analytics_outlined,
-              color: Color(0xFF00BFA6),
-              size: 22,
-            ),
-          ),
-          const SizedBox(width: 14),
-          Expanded(
+          Container(width: 5, height: 64, color: BBTheme.red),
+          const SizedBox(width: 16),
+          const Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  title,
-                  style: const TextStyle(
-                    color: Color(0xFF84919D),
-                    fontSize: 12,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  value,
-                  style: const TextStyle(
-                    fontSize: 22,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-                const SizedBox(height: 3),
-                Text(
-                  subtitle,
-                  style: const TextStyle(
-                    color: Color(0xFF687783),
-                    fontSize: 11,
-                  ),
-                ),
+                Text('B&B KNITFAB', style: TextStyle(color: BBTheme.redLight, fontSize: 15, fontWeight: FontWeight.w900, letterSpacing: 2.2)),
+                SizedBox(height: 5),
+                Text('FACTORY COMMAND CENTER', style: TextStyle(color: BBTheme.text, fontSize: 40, fontWeight: FontWeight.w900, letterSpacing: .2)),
+                SizedBox(height: 4),
+                Text('Live operational view of jobs, production, machines and material.', style: TextStyle(color: BBTheme.muted, fontSize: 18)),
               ],
             ),
           ),
-          Icon(
-            icon,
-            color: const Color(0xFF53616D),
-            size: 20,
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+            decoration: BoxDecoration(color: BBTheme.black3, border: Border.all(color: BBTheme.border), borderRadius: BorderRadius.circular(5)),
+            child: const Row(children: [
+              Icon(Icons.circle, size: 8, color: BBTheme.green),
+              SizedBox(width: 8),
+              Text('SYSTEM ONLINE', style: TextStyle(color: BBTheme.green, fontSize: 14, fontWeight: FontWeight.w900, letterSpacing: .7)),
+            ]),
           ),
         ],
       ),
@@ -233,383 +66,105 @@ class _KpiCard extends StatelessWidget {
   }
 }
 
-class _RecentJobsCard extends StatelessWidget {
-  const _RecentJobsCard();
-
+class _Kpis extends StatelessWidget {
+  const _Kpis();
   @override
   Widget build(BuildContext context) {
-    const jobs = [
-      ('BBJO-00128', 'Sandhir Textiles', 'Running', '420 kg'),
-      ('BBJO-00127', 'ABC Fabrics', 'Running', '680 kg'),
-      ('BBJO-00126', 'Modern Knits', 'Yarn Needed', '310 kg'),
-      ('BBJO-00125', 'ST Traders', 'Paused', '520 kg'),
-      ('BBJO-00124', 'Fashion Mills', 'Closed', '780 kg'),
+    const data = [
+      ('ACTIVE JOBS', '12', '3 NEED ATTENTION', Icons.assignment_outlined, BBTheme.red),
+      ('PRODUCTION TODAY', '1,284 KG', '+8.4% VS YESTERDAY', Icons.trending_up, BBTheme.green),
+      ('YARN STOCK', '8,462 KG', '24 LOTS AVAILABLE', Icons.inventory_2_outlined, BBTheme.red),
+      ('MACHINES RUNNING', '27 / 31', '87% AVAILABILITY', Icons.precision_manufacturing_outlined, BBTheme.green),
     ];
-
-    return _DashboardCard(
-      title: 'Recent Job Orders',
-      action: 'View all',
-      child: Column(
-        children: [
-          const SizedBox(height: 10),
-          for (int i = 0; i < jobs.length; i++) ...[
-            _JobRow(
-              jobNo: jobs[i].$1,
-              party: jobs[i].$2,
-              status: jobs[i].$3,
-              quantity: jobs[i].$4,
-            ),
-            if (i != jobs.length - 1)
-              const Divider(
-                height: 1,
-                color: Color(0xFF1D2933),
-              ),
-          ],
-        ],
-      ),
-    );
+    return LayoutBuilder(builder: (_, c) {
+      final n = c.maxWidth < 760 ? 2 : 4;
+      final gap = 12.0;
+      final w = (c.maxWidth - gap * (n - 1)) / n;
+      return Wrap(spacing: gap, runSpacing: gap, children: data.map((d) => SizedBox(width: w, child: _Kpi(title:d.$1, value:d.$2, sub:d.$3, icon:d.$4, accent:d.$5))).toList());
+    });
   }
 }
 
-class _JobRow extends StatelessWidget {
-  final String jobNo;
-  final String party;
-  final String status;
-  final String quantity;
+class _Kpi extends StatelessWidget {
+  final String title, value, sub; final IconData icon; final Color accent;
+  const _Kpi({required this.title, required this.value, required this.sub, required this.icon, required this.accent});
+  @override
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.all(17),
+    decoration: BoxDecoration(color: BBTheme.panel, border: Border.all(color: BBTheme.border), borderRadius: BorderRadius.circular(7)),
+    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Row(children: [Container(width: 32, height: 3, color: accent), const Spacer(), Icon(icon, size: 19, color: accent)]),
+      const SizedBox(height: 17),
+      Text(title, style: const TextStyle(color: BBTheme.muted, fontSize: 14, fontWeight: FontWeight.w900, letterSpacing: .8)),
+      const SizedBox(height: 4),
+      Text(value, style: const TextStyle(color: BBTheme.text, fontSize: 38, fontWeight: FontWeight.w900, letterSpacing: -.5)),
+      const SizedBox(height: 5),
+      Text(sub, style: TextStyle(color: accent, fontSize: 13, fontWeight: FontWeight.w900, letterSpacing: .4)),
+    ]),
+  );
+}
 
-  const _JobRow({
-    required this.jobNo,
-    required this.party,
-    required this.status,
-    required this.quantity,
+class _OperationsGrid extends StatelessWidget {
+  const _OperationsGrid();
+  @override
+  Widget build(BuildContext context) => LayoutBuilder(builder: (_, c) {
+    if (c.maxWidth < 1000) return const Column(children: [_Production(), SizedBox(height: 14), _Machines()]);
+    return const Row(crossAxisAlignment: CrossAxisAlignment.start, children: [Expanded(flex: 3, child: _Production()), SizedBox(width: 14), Expanded(flex: 2, child: _Machines())]);
   });
+}
 
-  Color _statusColor() {
-    switch (status) {
-      case 'Running':
-        return const Color(0xFF2DD4BF);
-      case 'Yarn Needed':
-        return const Color(0xFFF87171);
-      case 'Paused':
-        return const Color(0xFFFBBF24);
-      case 'Closed':
-        return const Color(0xFFA78BFA);
-      default:
-        return const Color(0xFF84919D);
-    }
-  }
+class _Panel extends StatelessWidget {
+  final String title, action; final Widget child;
+  const _Panel({required this.title, required this.action, required this.child});
+  @override
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.all(18),
+    decoration: BoxDecoration(color: BBTheme.panel, border: Border.all(color: BBTheme.border), borderRadius: BorderRadius.circular(7)),
+    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Row(children: [Text(title, style: const TextStyle(color: BBTheme.text, fontSize: 19, fontWeight: FontWeight.w900, letterSpacing: .2)), const Spacer(), Text(action, style: const TextStyle(color: BBTheme.redLight, fontSize: 13, fontWeight: FontWeight.w900, letterSpacing: .5))]),
+      const SizedBox(height: 13),
+      child,
+    ]),
+  );
+}
 
+class _Production extends StatelessWidget {
+  const _Production();
+  static const rows = [('BBJO-00128','Sandhir Textiles','Single Jersey 180 GSM',86.0,420.0),('BBJO-00127','ABC Fabrics','Interlock 220 GSM',112.0,680.0),('BBJO-00125','ST Traders','Cotton Lycra 200 GSM',34.0,520.0),('BBJO-00124','Fashion Mills','Polyester Rib 160 GSM',0.0,780.0)];
+  @override
+  Widget build(BuildContext context) => _Panel(title:'TODAY\'S PRODUCTION', action:'VIEW ALL', child: Column(children: rows.map((r) => _ProdRow(r)).toList()));
+}
+class _ProdRow extends StatelessWidget {
+  final (String,String,String,double,double) r; const _ProdRow(this.r);
   @override
   Widget build(BuildContext context) {
-    final statusColor = _statusColor();
-
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 15),
-      child: Row(
-        children: [
-          SizedBox(
-            width: 105,
-            child: Text(
-              jobNo,
-              style: const TextStyle(
-                fontWeight: FontWeight.w600,
-                fontSize: 12,
-              ),
-            ),
-          ),
-          Expanded(
-            child: Text(
-              party,
-              style: const TextStyle(
-                color: Color(0xFFB7C1C9),
-                fontSize: 12,
-              ),
-            ),
-          ),
-          Container(
-            padding: const EdgeInsets.symmetric(
-              horizontal: 8,
-              vertical: 4,
-            ),
-            decoration: BoxDecoration(
-              color: statusColor.withValues(alpha: 0.10),
-              borderRadius: BorderRadius.circular(20),
-            ),
-            child: Text(
-              status,
-              style: TextStyle(
-                color: statusColor,
-                fontSize: 10,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ),
-          const SizedBox(width: 16),
-          SizedBox(
-            width: 65,
-            child: Text(
-              quantity,
-              textAlign: TextAlign.right,
-              style: const TextStyle(
-                color: Color(0xFF9BA7B2),
-                fontSize: 12,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
+    final p = r.$5 == 0 ? 0.0 : (r.$4/r.$5).clamp(0.0,1.0);
+    return Container(padding: const EdgeInsets.symmetric(vertical: 11), decoration: const BoxDecoration(border: Border(bottom: BorderSide(color: BBTheme.borderSoft))), child: Column(children: [
+      Row(children: [SizedBox(width:90, child: Text(r.$1, style: const TextStyle(color: BBTheme.text, fontSize: 14, fontWeight: FontWeight.w900))), Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(r.$2, style: const TextStyle(color: BBTheme.text, fontSize: 15, fontWeight: FontWeight.w800)), const SizedBox(height:2), Text(r.$3, style: const TextStyle(color: BBTheme.muted, fontSize: 13))])), Text('${r.$4.toStringAsFixed(0)} / ${r.$5.toStringAsFixed(0)} KG', style: const TextStyle(color: BBTheme.text, fontSize: 14, fontWeight: FontWeight.w800))]),
+      const SizedBox(height:8), ClipRRect(borderRadius: BorderRadius.circular(3), child: LinearProgressIndicator(value:p, minHeight:5, backgroundColor:BBTheme.black4, color:p==0?BBTheme.subtle:BBTheme.red)),
+    ]));
   }
 }
 
-class _MachineStatusCard extends StatelessWidget {
-  const _MachineStatusCard();
-
+class _Machines extends StatelessWidget {
+  const _Machines();
   @override
-  Widget build(BuildContext context) {
-    return _DashboardCard(
-      title: 'Machine Status',
-      action: 'View machines',
-      child: Column(
-        children: [
-          const SizedBox(height: 14),
-          _MachineStatusRow(
-            label: 'Running',
-            value: '27',
-            icon: Icons.play_circle_outline,
-          ),
-          _MachineStatusRow(
-            label: 'Idle',
-            value: '2',
-            icon: Icons.pause_circle_outline,
-          ),
-          _MachineStatusRow(
-            label: 'Maintenance',
-            value: '1',
-            icon: Icons.build_outlined,
-          ),
-          _MachineStatusRow(
-            label: 'Stopped',
-            value: '1',
-            icon: Icons.stop_circle_outlined,
-          ),
-          const SizedBox(height: 15),
-          Container(
-            height: 8,
-            decoration: BoxDecoration(
-              color: const Color(0xFF25313B),
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: FractionallySizedBox(
-              alignment: Alignment.centerLeft,
-              widthFactor: 27 / 31,
-              child: Container(
-                decoration: BoxDecoration(
-                  color: const Color(0xFF00BFA6),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-              ),
-            ),
-          ),
-          const SizedBox(height: 8),
-          const Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                'Utilisation',
-                style: TextStyle(
-                  color: Color(0xFF71808D),
-                  fontSize: 11,
-                ),
-              ),
-              Text(
-                '87%',
-                style: TextStyle(
-                  color: Color(0xFFB7C1C9),
-                  fontSize: 11,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
+  Widget build(BuildContext context) => _Panel(title:'MACHINE STATUS', action:'VIEW MACHINES', child: Column(children: [
+    _Machine('RUNNING','27',BBTheme.green,Icons.play_circle_outline),
+    _Machine('IDLE','2',BBTheme.amber,Icons.pause_circle_outline),
+    _Machine('MAINTENANCE','1',BBTheme.red,Icons.build_outlined),
+    _Machine('STOPPED','1',BBTheme.red,Icons.stop_circle_outlined),
+    const SizedBox(height:12),
+    Row(children: [Expanded(child: ClipRRect(borderRadius:BorderRadius.circular(3), child: const LinearProgressIndicator(value:27/31,minHeight:7,backgroundColor:BBTheme.black4,color:BBTheme.red))), const SizedBox(width:10), const Text('87%',style:TextStyle(color:BBTheme.text,fontSize:13,fontWeight:FontWeight.w900))]),
+  ]));
 }
+class _Machine extends StatelessWidget { final String label,value; final Color color; final IconData icon; const _Machine(this.label,this.value,this.color,this.icon); @override Widget build(BuildContext context)=>Padding(padding:const EdgeInsets.symmetric(vertical:9),child:Row(children:[Icon(icon,size:17,color:color),const SizedBox(width:10),Expanded(child:Text(label,style:const TextStyle(color:BBTheme.muted,fontSize:13,fontWeight:FontWeight.w700))),Text(value,style:TextStyle(color:color,fontSize:16,fontWeight:FontWeight.w900))])); }
 
-class _MachineStatusRow extends StatelessWidget {
-  final String label;
-  final String value;
-  final IconData icon;
-
-  const _MachineStatusRow({
-    required this.label,
-    required this.value,
-    required this.icon,
-  });
-
+class _Attention extends StatelessWidget {
+  const _Attention();
   @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 9),
-      child: Row(
-        children: [
-          Icon(
-            icon,
-            size: 18,
-            color: const Color(0xFF6F7D88),
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Text(
-              label,
-              style: const TextStyle(
-                color: Color(0xFF9BA7B2),
-                fontSize: 12,
-              ),
-            ),
-          ),
-          Text(
-            value,
-            style: const TextStyle(
-              fontWeight: FontWeight.w600,
-              fontSize: 13,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _QuickActionsCard extends StatelessWidget {
-  const _QuickActionsCard();
-
-  @override
-  Widget build(BuildContext context) {
-    return _DashboardCard(
-      title: 'Quick Actions',
-      child: Wrap(
-        spacing: 12,
-        runSpacing: 12,
-        children: [
-          _QuickAction(
-            icon: Icons.add_task,
-            label: 'New Job Order',
-          ),
-          _QuickAction(
-            icon: Icons.local_shipping_outlined,
-            label: 'Receive Yarn',
-          ),
-          _QuickAction(
-            icon: Icons.precision_manufacturing_outlined,
-            label: 'Production Entry',
-          ),
-          _QuickAction(
-            icon: Icons.inventory_outlined,
-            label: 'Check Inventory',
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _QuickAction extends StatelessWidget {
-  final IconData icon;
-  final String label;
-
-  const _QuickAction({
-    required this.icon,
-    required this.label,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(
-        horizontal: 16,
-        vertical: 12,
-      ),
-      decoration: BoxDecoration(
-        color: const Color(0xFF151F28),
-        borderRadius: BorderRadius.circular(9),
-        border: Border.all(
-          color: const Color(0xFF25313B),
-        ),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const Icon(
-            Icons.add,
-            size: 16,
-            color: Color(0xFF00BFA6),
-          ),
-          const SizedBox(width: 8),
-          Text(
-            label,
-            style: const TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w500,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _DashboardCard extends StatelessWidget {
-  final String title;
-  final String? action;
-  final Widget child;
-
-  const _DashboardCard({
-    required this.title,
-    required this.child,
-    this.action,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: const Color(0xFF111A22),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: const Color(0xFF1E2A34),
-        ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Text(
-                title,
-                style: const TextStyle(
-                  fontSize: 15,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-              const Spacer(),
-              if (action != null)
-                Text(
-                  action!,
-                  style: const TextStyle(
-                    color: Color(0xFF00BFA6),
-                    fontSize: 11,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-            ],
-          ),
-          child,
-        ],
-      ),
-    );
-  }
+  Widget build(BuildContext context) => _Panel(title:'MANAGEMENT ATTENTION', action:'4 OPEN ITEMS', child: LayoutBuilder(builder: (_, c) {
+    final items=[('YARN','BBJO-00126 requires yarn before production can start.',Icons.inventory_2_outlined),('MAINTENANCE','1 machine is currently under maintenance.',Icons.build_outlined),('PRODUCTION','2 active jobs are below today\'s planned output.',Icons.trending_down),('STOCK','Spandex 40D is approaching low-stock level.',Icons.warning_amber_outlined)];
+    return Wrap(spacing:10,runSpacing:10,children:items.map((i)=>SizedBox(width:c.maxWidth<700?c.maxWidth:(c.maxWidth-10)/2,child:Container(padding:const EdgeInsets.all(13),decoration:BoxDecoration(color:BBTheme.black2,border:Border.all(color:BBTheme.borderSoft),borderRadius:BorderRadius.circular(5)),child:Row(children:[Container(width:34,height:34,decoration:BoxDecoration(color:const Color(0x22E53935),borderRadius:BorderRadius.circular(5)),child:Icon(i.$3,color:BBTheme.redLight,size:17)),const SizedBox(width:10),Expanded(child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[Text(i.$1,style:const TextStyle(color:BBTheme.redLight,fontSize:11,fontWeight:FontWeight.w900,letterSpacing:.8)),const SizedBox(height:3),Text(i.$2,style:const TextStyle(color:BBTheme.text,fontSize:12,height:1.35))]))])))).toList());
+  }));
 }

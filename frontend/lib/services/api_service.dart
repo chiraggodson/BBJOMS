@@ -3,7 +3,7 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 
 class ApiService {
-  static const String baseUrl = 'http://192.168.1.20:4000/api';
+  static const String baseUrl = 'http://192.168.29.6:4000/api';
 
   // ============================================================
   // PARTIES
@@ -641,7 +641,7 @@ class ApiService {
 
   Future<List<String>> createJob({
     required int partyId,
-    required String fabricName,
+    required int fabricId,
     required double gsm,
     required double orderQuantity,
     required List<int> machineIds,
@@ -658,16 +658,15 @@ class ApiService {
 
     final body = <String, dynamic>{
       'party_id': partyId,
-      'fabric_name': fabricName,
+      'fabric_id': fabricId,
       'gsm': gsm,
       'order_quantity': orderQuantity,
       'machine_ids': machineIds,
       'yarns': yarns
           .map(
             (yarn) => {
-              'yarn_name': yarn.yarnName,
-              'yarn_count': yarn.yarnCount,
-              'required_kg': yarn.quantity,
+              'yarn_id': yarn.yarnId,
+              'quantity': yarn.quantity,
             },
           )
           .toList(),
@@ -705,27 +704,22 @@ class ApiService {
 
     final jobs = data['jobs'];
 
-    if (jobs is List) {
-      return jobs
-          .map((job) {
-            if (job is Map && (job['job_no'] != null || job['jobNo'] != null)) {
-              return (job['job_no'] ?? job['jobNo']).toString();
-            }
-            return job.toString();
-          })
-          .toList();
+    if (jobs is! List) {
+      throw ApiException(
+        data['error']?.toString() ??
+            'Job was created but no job numbers were returned',
+        response.statusCode,
+      );
     }
 
-    final job = data['job'];
-    if (job is Map && (job['job_no'] != null || job['jobNo'] != null)) {
-      return [(job['job_no'] ?? job['jobNo']).toString()];
-    }
-
-    throw ApiException(
-      data['error']?.toString() ??
-          'Job was created but no job number was returned',
-      response.statusCode,
-    );
+    return jobs
+        .map((job) {
+          if (job is Map && job['job_no'] != null) {
+            return job['job_no'].toString();
+          }
+          return job.toString();
+        })
+        .toList();
   }
 
   // ============================================================
@@ -735,7 +729,7 @@ class ApiService {
   Future<JobOrder> updateJob({
     required int id,
     required int partyId,
-    required String fabricName,
+    required int fabricId,
     required double gsm,
     required double orderQuantity,
     List<int> machineIds = const [],
@@ -745,16 +739,15 @@ class ApiService {
 
     final body = <String, dynamic>{
       'party_id': partyId,
-      'fabric_name': fabricName,
+      'fabric_id': fabricId,
       'gsm': gsm,
       'order_quantity': orderQuantity,
       'machine_ids': machineIds,
       'yarns': yarns
           .map(
             (yarn) => {
-              'yarn_name': yarn.yarnName,
-              'yarn_count': yarn.yarnCount,
-              'required_kg': yarn.quantity,
+              'yarn_id': yarn.yarnId,
+              'quantity': yarn.quantity,
             },
           )
           .toList(),
@@ -1064,6 +1057,85 @@ Future<void> deactivateFabric(String id) async {
 
 
   // ============================================================
+  // COLOR MASTER
+  // ============================================================
+
+  Future<List<ColorMaster>> getColors() async {
+    final response = await http.get(
+      Uri.parse('$baseUrl/yarns/colors'),
+    );
+
+    final decoded = _tryDecode(response.body);
+    if (response.statusCode != 200 || decoded is! List) {
+      throw ApiException(
+        _extractError(decoded, 'Failed to load colors'),
+        response.statusCode,
+      );
+    }
+
+    return decoded
+        .map((e) => ColorMaster.fromJson(
+              Map<String, dynamic>.from(e as Map),
+            ))
+        .toList();
+  }
+
+  Future<ColorMaster> createColor({
+    required String name,
+    String? description,
+  }) async {
+    final response = await http.post(
+      Uri.parse('$baseUrl/yarns/colors'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({
+        'name': name,
+        'description': description,
+      }),
+    );
+
+    final data = _decodeMap(response.body);
+    if (response.statusCode != 201 || data['success'] != true) {
+      throw ApiException(
+        data['error']?.toString() ?? 'Failed to create color',
+        response.statusCode,
+      );
+    }
+
+    return ColorMaster.fromJson(
+      Map<String, dynamic>.from(data['color'] as Map),
+    );
+  }
+
+  Future<ColorMaster> updateColor({
+    required String id,
+    required String name,
+    String? description,
+    bool isActive = true,
+  }) async {
+    final response = await http.put(
+      Uri.parse('$baseUrl/yarns/colors/$id'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({
+        'name': name,
+        'description': description,
+        'is_active': isActive,
+      }),
+    );
+
+    final data = _decodeMap(response.body);
+    if (response.statusCode != 200 || data['success'] != true) {
+      throw ApiException(
+        data['error']?.toString() ?? 'Failed to update color',
+        response.statusCode,
+      );
+    }
+
+    return ColorMaster.fromJson(
+      Map<String, dynamic>.from(data['color'] as Map),
+    );
+  }
+
+  // ============================================================
   // HELPERS
   // ============================================================
 
@@ -1316,7 +1388,6 @@ class YarnMaster {
   final String count;
   final int? yarnTypeId;
   final String composition;
-  final String colour;
   final int? unitId;
   final String description;
   final bool isActive;
@@ -1328,7 +1399,6 @@ class YarnMaster {
     required this.count,
     this.yarnTypeId,
     required this.composition,
-    required this.colour,
     this.unitId,
     required this.description,
     required this.isActive,
@@ -1351,8 +1421,37 @@ class YarnMaster {
           '',
       yarnTypeId: _toNullableInt(json['yarn_type_id']),
       composition: json['composition']?.toString() ?? '',
-      colour: json['colour']?.toString() ?? '',
       unitId: _toNullableInt(json['unit_id']),
+      description: json['description']?.toString() ?? '',
+      isActive: json['is_active'] != false,
+    );
+  }
+}
+
+// ============================================================
+// COLOR MASTER MODEL
+// ============================================================
+
+class ColorMaster {
+  final String id;
+  final String code;
+  final String name;
+  final String description;
+  final bool isActive;
+
+  const ColorMaster({
+    required this.id,
+    required this.code,
+    required this.name,
+    required this.description,
+    required this.isActive,
+  });
+
+  factory ColorMaster.fromJson(Map<String, dynamic> json) {
+    return ColorMaster(
+      id: json['id']?.toString() ?? '',
+      code: json['code']?.toString() ?? '',
+      name: json['name']?.toString() ?? '',
       description: json['description']?.toString() ?? '',
       isActive: json['is_active'] != false,
     );
@@ -1371,8 +1470,8 @@ class JobYarnRequirement {
 
   const JobYarnRequirement({
     required this.yarnId,
-    required this.yarnName,
-    required this.yarnCount,
+    this.yarnName = '',
+    this.yarnCount = '',
     this.quantity,
   });
 }
@@ -1419,29 +1518,58 @@ class JobOrder {
   });
 
   factory JobOrder.fromJson(Map<String, dynamic> json) {
+    // The current jobs API returns camelCase fields. Keep snake_case
+    // fallbacks so this model remains compatible with older responses.
     return JobOrder(
       id: _toInt(json['id']),
       jobNo: (json['jobNo'] ?? json['job_no'])?.toString() ?? '',
       fabricId: _toNullableInt(json['fabricId'] ?? json['fabric_id']),
-      fabricName: (json['fabricName'] ?? json['fabric_name'])?.toString() ?? '',
+      fabricName:
+          (json['fabricName'] ?? json['fabric_name'])?.toString() ?? '',
       partyId: _toNullableInt(json['partyId'] ?? json['party_id']),
-      partyName: (json['partyName'] ?? json['party_name'])?.toString() ?? '',
+      partyName:
+          (json['partyName'] ?? json['party_name'])?.toString() ?? '',
       machineId: _toNullableInt(json['machineId'] ?? json['machine_id']),
-      machineNo: (json['machineNo'] ?? json['machine_no'] ?? json['machineNumbers'])?.toString() ?? '',
+      machineNo:
+          (json['machineNo'] ??
+                  json['machine_no'] ??
+                  json['machineNumbers'] ??
+                  json['machine_numbers'])
+              ?.toString() ??
+          '',
       gsm: _toDouble(json['gsm']),
-      orderQuantity: _toDouble(json['orderQuantity'] ?? json['order_quantity']),
-      status: (json['status'] ?? '').toString(),
-      createdAt: (json['createdAt'] ?? json['created_at'])?.toString() ?? '',
-      yarnsUsed: (json['yarnsUsed'] ?? json['yarns_used'])?.toString() ?? '',
-      actualProduction: _toDouble(json['actualProduction'] ?? json['producedQuantity'] ?? json['actual_production'] ?? json['produced_quantity']),
-      avgRollSize: _toDouble(json['avgRollSize'] ?? json['avg_roll_size']),
-      remainingQuantity: _toDouble(json['remainingQuantity'] ?? json['remaining_quantity']),
+      orderQuantity:
+          _toDouble(json['orderQuantity'] ?? json['order_quantity']),
+      status: json['status']?.toString() ?? '',
+      createdAt:
+          (json['createdAt'] ?? json['created_at'] ?? json['jobDate'] ?? json['job_date'])
+              ?.toString() ??
+          '',
+      yarnsUsed:
+          (json['yarnsUsed'] ?? json['yarns_used'])?.toString() ?? '',
+      actualProduction: _toDouble(
+        json['actualProduction'] ??
+            json['actual_production'] ??
+            json['producedQuantity'] ??
+            json['produced_quantity'],
+      ),
+      avgRollSize: _toDouble(
+        json['avgRollSize'] ?? json['avg_roll_size'],
+      ),
+      remainingQuantity: _toDouble(
+        json['remainingQuantity'] ?? json['remaining_quantity'],
+      ),
     );
   }
 
   double get completionPercent {
-    if (orderQuantity <= 0) return 0;
-    return (actualProduction / orderQuantity * 100).clamp(0, 100);
+    if (orderQuantity <= 0) {
+      return 0;
+    }
+
+    final value = actualProduction / orderQuantity * 100;
+
+    return value.clamp(0, 100);
   }
 }
 
@@ -1461,34 +1589,70 @@ class JobDetails {
   });
 
   factory JobDetails.fromJson(Map<String, dynamic> json) {
-    final rawMachines = json['machineIds'] ?? json['machine_ids'] ?? json['machines'] ?? const [];
-    final rawYarns = json['yarns'] is List ? json['yarns'] as List : const [];
+    // /jobs/details/:id returns the complete job object directly:
+    // { success, id, jobNo, ..., machineIds, yarns, production }.
+    // Older responses may wrap the job in a `job` object.
+    final rawMachines = json['machines'] is List
+        ? json['machines'] as List
+        : json['machineIds'] is List
+            ? json['machineIds'] as List
+            : json['machine_ids'] is List
+                ? json['machine_ids'] as List
+                : const [];
+
+    final rawYarns =
+        json['yarns'] is List ? json['yarns'] as List : const [];
 
     final jobData = json['job'] is Map
         ? Map<String, dynamic>.from(json['job'] as Map)
         : json;
 
+    final job = JobOrder.fromJson(jobData);
+
     return JobDetails(
-      job: JobOrder.fromJson(jobData),
-      machineIds: rawMachines is List
-          ? rawMachines.map((item) {
-              if (item is Map) {
-                return _toInt(item['machineId'] ?? item['machine_id'] ?? item['id']);
-              }
-              return _toInt(item);
-            }).where((id) => id > 0).toList()
-          : <int>[],
+      job: job,
+      machineIds: rawMachines.map((item) {
+        if (item is Map) {
+          return _toInt(
+            item['machineId'] ??
+                item['machine_id'] ??
+                item['id'],
+          );
+        }
+
+        return _toInt(item);
+      }).where((id) => id > 0).toList(),
       yarns: rawYarns.map((item) {
         final map = Map<String, dynamic>.from(item as Map);
+
         return JobYarnRequirement(
-          yarnId: (map['yarnId'] ?? map['yarn_id'] ?? map['id'])?.toString() ?? '',
-          yarnName: (map['yarnName'] ?? map['yarn_name'])?.toString() ?? '',
-          yarnCount: (map['yarnCount'] ?? map['yarn_count'])?.toString() ?? '',
+          yarnId:
+              (map['yarnId'] ??
+                      map['yarn_id'] ??
+                      map['id'])
+                  ?.toString() ??
+              '',
+          yarnName:
+              (map['yarnName'] ??
+                      map['yarn_name'] ??
+                      map['name'])
+                  ?.toString() ??
+              '',
+          yarnCount:
+              (map['yarnCount'] ??
+                      map['yarn_count'] ??
+                      map['count'])
+                  ?.toString() ??
+              '',
           quantity: map['quantity'] != null
               ? _toDouble(map['quantity'])
-              : _toDouble(map['requiredKg'] ?? map['required_kg']),
+              : map['requiredKg'] != null
+                  ? _toDouble(map['requiredKg'])
+                  : map['required_kg'] != null
+                      ? _toDouble(map['required_kg'])
+                      : null,
         );
-      }).toList(),
+      }).where((yarn) => yarn.yarnId.isNotEmpty).toList(),
     );
   }
 }
@@ -1519,11 +1683,13 @@ class JobYarnHistory {
   ) {
     return JobYarnHistory(
       transactionType:
-          json['transaction_type']?.toString() ?? '',
+          (json['transactionType'] ?? json['transaction_type'])?.toString() ?? '',
       quantity: _toDouble(json['quantity']),
-      createdAt: json['created_at']?.toString() ?? '',
-      lotNo: json['lot_no']?.toString() ?? '',
-      yarnName: json['yarn_name']?.toString() ?? '',
+      createdAt:
+          (json['createdAt'] ?? json['created_at'])?.toString() ?? '',
+      lotNo: (json['lotNo'] ?? json['lot_no'])?.toString() ?? '',
+      yarnName:
+          (json['yarnName'] ?? json['yarn_name'])?.toString() ?? '',
       remarks: json['remarks']?.toString() ?? '',
     );
   }
@@ -1548,10 +1714,19 @@ class JobProductionHistory {
     Map<String, dynamic> json,
   ) {
     return JobProductionHistory(
-      rollNo: json['roll_no']?.toString() ?? '',
-      quantity: _toDouble(json['quantity'] ?? json['quantity_kg']),
-      createdAt: json['created_at']?.toString() ??
-          json['production_date']?.toString() ??
+      rollNo:
+          (json['rollNo'] ?? json['roll_no'])?.toString() ?? '',
+      quantity: _toDouble(
+        json['quantity'] ??
+            json['quantityKg'] ??
+            json['quantity_kg'],
+      ),
+      createdAt:
+          (json['createdAt'] ??
+                  json['created_at'] ??
+                  json['productionDate'] ??
+                  json['production_date'])
+              ?.toString() ??
           '',
     );
   }

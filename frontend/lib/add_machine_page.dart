@@ -1,16 +1,17 @@
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
+import 'app_theme.dart';
 import 'package:http/http.dart' as http;
 
 import 'services/api_service.dart';
 
-const _bg = Color(0xFF0B1117);
-const _panel = Color(0xFF111A22);
-const _panel2 = Color(0xFF0F171E);
-const _border = Color(0xFF1E2A34);
-const _muted = Color(0xFF84919D);
-const _teal = Color(0xFF00BFA6);
+const _bg = BBTheme.canvas;
+const _panel = BBTheme.panel;
+const _panel2 = BBTheme.black3;
+const _border = BBTheme.border;
+const _muted = BBTheme.muted;
+const _accent = BBTheme.red;
 
 class AddMachinePage extends StatefulWidget {
   final Machine? machine;
@@ -27,7 +28,7 @@ class AddMachinePage extends StatefulWidget {
 }
 
 class _AddMachinePageState extends State<AddMachinePage> {
-  static const String _baseUrl = 'http://192.168.1.20:4000/api';
+  static const String _baseUrl = 'http://192.168.29.6:4000/api';
 
   final _formKey = GlobalKey<FormState>();
 
@@ -243,7 +244,7 @@ class _AddMachinePageState extends State<AddMachinePage> {
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(9),
         borderSide:
-            const BorderSide(color: _teal),
+            const BorderSide(color: _accent),
       ),
     );
   }
@@ -515,7 +516,7 @@ class _AddMachinePageState extends State<AddMachinePage> {
                           ),
                           style:
                               FilledButton.styleFrom(
-                            backgroundColor: _teal,
+                            backgroundColor: _accent,
                             foregroundColor:
                                 Colors.black,
                             padding:

@@ -1,12 +1,13 @@
 
 import 'package:flutter/material.dart';
+import 'app_theme.dart';
 
-const _bg = Color(0xFF0B1117);
-const _panel = Color(0xFF111A22);
-const _panel2 = Color(0xFF0F171E);
-const _border = Color(0xFF1E2A34);
-const _muted = Color(0xFF84919D);
-const _teal = Color(0xFF00BFA6);
+const _bg = BBTheme.canvas;
+const _panel = BBTheme.panel;
+const _panel2 = BBTheme.black3;
+const _border = BBTheme.border;
+const _muted = BBTheme.muted;
+const _accent = BBTheme.red;
 
 class _Card extends StatelessWidget {
   final String title;
@@ -26,7 +27,7 @@ class _Card extends StatelessWidget {
       Row(children: [
         Text(title, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
         const Spacer(),
-        if (action != null) Text(action!, style: const TextStyle(color: _teal, fontSize: 11, fontWeight: FontWeight.w600)),
+        if (action != null) Text(action!, style: const TextStyle(color: _accent, fontSize: 11, fontWeight: FontWeight.w600)),
       ]),
       const SizedBox(height: 14),
       child,
@@ -43,7 +44,7 @@ class _Stat extends StatelessWidget {
     padding: const EdgeInsets.all(18),
     decoration: BoxDecoration(color: _panel, borderRadius: BorderRadius.circular(12), border: Border.all(color: _border)),
     child: Row(children: [
-      Container(width: 42, height: 42, decoration: BoxDecoration(color: _teal.withValues(alpha: .12), borderRadius: BorderRadius.circular(10)), child: Icon(icon, color: _teal, size: 21)),
+      Container(width: 42, height: 42, decoration: BoxDecoration(color: _accent.withValues(alpha: .12), borderRadius: BorderRadius.circular(10)), child: Icon(icon, color: _accent, size: 21)),
       const SizedBox(width: 12),
       Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Text(title, style: const TextStyle(color: _muted, fontSize: 11)),
@@ -60,7 +61,7 @@ class _Status extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     Color c = _muted;
-    if (text == 'Running' || text == 'Open' || text == 'Available') c = const Color(0xFF2DD4BF);
+    if (text == 'Running' || text == 'Open' || text == 'Available') c = BBTheme.green;
     if (text == 'Yarn Needed' || text == 'Low Stock') c = const Color(0xFFF87171);
     if (text == 'Paused' || text == 'Pending') c = const Color(0xFFFBBF24);
     if (text == 'Closed' || text == 'Complete') c = const Color(0xFFA78BFA);
@@ -76,15 +77,15 @@ Widget _search(String hint) => TextField(
   decoration: InputDecoration(
     hintText: hint, prefixIcon: const Icon(Icons.search, size: 20),
     filled: true, fillColor: _panel2,
-    border: OutlineInputBorder(borderRadius: BorderRadius.circular(9), borderSide: const BorderSide(color: Color(0xFF25313B))),
-    enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(9), borderSide: const BorderSide(color: Color(0xFF25313B))),
-    focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(9), borderSide: const BorderSide(color: _teal)),
+    border: OutlineInputBorder(borderRadius: BorderRadius.circular(9), borderSide: const BorderSide(color: BBTheme.border)),
+    enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(9), borderSide: const BorderSide(color: BBTheme.border)),
+    focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(9), borderSide: const BorderSide(color: _accent)),
   ),
 );
 
 Widget _primary(String label, IconData icon, VoidCallback onPressed) => FilledButton.icon(
   onPressed: onPressed, icon: Icon(icon, size: 18), label: Text(label),
-  style: FilledButton.styleFrom(backgroundColor: _teal, foregroundColor: Colors.white, padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14)),
+  style: FilledButton.styleFrom(backgroundColor: _accent, foregroundColor: Colors.white, padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14)),
 );
 
 
@@ -105,8 +106,8 @@ class ReportsPage extends StatelessWidget {
     ])),
   ]));
   Widget _report(IconData icon,String title,String sub,String action)=>Container(padding:const EdgeInsets.symmetric(vertical:15),decoration:const BoxDecoration(border:Border(bottom:BorderSide(color:Color(0xFF1D2933)))),child:Row(children:[
-    Container(width:40,height:40,decoration:BoxDecoration(color:_teal.withValues(alpha:.10),borderRadius:BorderRadius.circular(9)),child:Icon(icon,color:_teal,size:20)),const SizedBox(width:12),
+    Container(width:40,height:40,decoration:BoxDecoration(color:_accent.withValues(alpha:.10),borderRadius:BorderRadius.circular(9)),child:Icon(icon,color:_accent,size:20)),const SizedBox(width:12),
     Expanded(child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[Text(title,style:const TextStyle(fontWeight:FontWeight.w600,fontSize:12)),const SizedBox(height:3),Text(sub,style:const TextStyle(color:_muted,fontSize:10))])),
-    Text(action,style:const TextStyle(color:_teal,fontSize:10,fontWeight:FontWeight.w600)),const SizedBox(width:6),const Icon(Icons.chevron_right,color:_muted,size:18)
+    Text(action,style:const TextStyle(color:_accent,fontSize:10,fontWeight:FontWeight.w600)),const SizedBox(width:6),const Icon(Icons.chevron_right,color:_muted,size:18)
   ]));
 }

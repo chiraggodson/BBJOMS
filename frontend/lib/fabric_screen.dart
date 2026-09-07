@@ -1,12 +1,13 @@
 import 'package:flutter/material.dart';
+import 'app_theme.dart';
 import 'services/api_service.dart';
 
-const _bg = Color(0xFF0B1117);
-const _panel = Color(0xFF111A22);
-const _panel2 = Color(0xFF0F171E);
-const _border = Color(0xFF1E2A34);
-const _muted = Color(0xFF84919D);
-const _teal = Color(0xFF00BFA6);
+const _bg = BBTheme.canvas;
+const _panel = BBTheme.panel;
+const _panel2 = BBTheme.black3;
+const _border = BBTheme.border;
+const _muted = BBTheme.muted;
+const _accent = BBTheme.red;
 
 class FabricPage extends StatefulWidget {
   const FabricPage({super.key});
@@ -207,7 +208,7 @@ class _FabricPageState extends State<FabricPage> {
                       const Text('New Fabric'),
                   style:
                       FilledButton.styleFrom(
-                    backgroundColor: _teal,
+                    backgroundColor: _accent,
                     foregroundColor:
                         Colors.white,
                     padding:
@@ -317,7 +318,7 @@ class _FabricPageState extends State<FabricPage> {
                           _inputBorder(),
                       focusedBorder:
                           _inputBorder(
-                        _teal,
+                        _accent,
                       ),
                     ),
                   ),
@@ -330,7 +331,7 @@ class _FabricPageState extends State<FabricPage> {
                           EdgeInsets.all(50),
                       child:
                           CircularProgressIndicator(
-                        color: _teal,
+                        color: _accent,
                       ),
                     )
                   else if (_error != null)
@@ -631,7 +632,7 @@ class _FabricFormDialogState
         FilledButton(
           onPressed: _saving ? null : _save,
           style: FilledButton.styleFrom(
-            backgroundColor: _teal,
+            backgroundColor: _accent,
           ),
           child: _saving
               ? const SizedBox(
@@ -976,7 +977,7 @@ class _FormField extends StatelessWidget {
         fillColor: _panel2,
         border: _inputBorder(),
         enabledBorder: _inputBorder(),
-        focusedBorder: _inputBorder(_teal),
+        focusedBorder: _inputBorder(_accent),
       ),
     );
   }
@@ -1059,7 +1060,7 @@ class _Stat extends StatelessWidget {
             width: 42,
             height: 42,
             decoration: BoxDecoration(
-              color: _teal.withValues(
+              color: _accent.withValues(
                 alpha: .12,
               ),
               borderRadius:
@@ -1067,7 +1068,7 @@ class _Stat extends StatelessWidget {
             ),
             child: Icon(
               icon,
-              color: _teal,
+              color: _accent,
               size: 21,
             ),
           ),
@@ -1173,7 +1174,7 @@ class _TableHeaderStyle {
 // ============================================================
 
 OutlineInputBorder _inputBorder([
-  Color color = const Color(0xFF25313B),
+  Color color = BBTheme.border,
 ]) {
   return OutlineInputBorder(
     borderRadius:

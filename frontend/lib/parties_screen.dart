@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'app_theme.dart';
 
 import 'services/api_service.dart';
 
@@ -302,7 +303,7 @@ class _PartiesPageState extends State<PartiesPage> {
 
                       style: TextStyle(
 
-                        color: Color(0xFF84919D),
+                        color: BBTheme.muted,
 
                         fontSize: 13,
 
@@ -338,7 +339,7 @@ class _PartiesPageState extends State<PartiesPage> {
 
                 style: FilledButton.styleFrom(
 
-                  backgroundColor: const Color(0xFF00BFA6),
+                  backgroundColor: BBTheme.red,
 
                   foregroundColor: Colors.white,
 
@@ -398,23 +399,23 @@ class _PartiesPageState extends State<PartiesPage> {
                                   icon: const Icon(Icons.clear, size: 18),
                                 ),
                           filled: true,
-                          fillColor: const Color(0xFF0F171E),
+                          fillColor: BBTheme.black3,
                           border: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(9),
                             borderSide: const BorderSide(
-                              color: Color(0xFF25313B),
+                              color: BBTheme.border,
                             ),
                           ),
                           enabledBorder: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(9),
                             borderSide: const BorderSide(
-                              color: Color(0xFF25313B),
+                              color: BBTheme.border,
                             ),
                           ),
                           focusedBorder: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(9),
                             borderSide: const BorderSide(
-                              color: Color(0xFF00BFA6),
+                              color: BBTheme.red,
                             ),
                           ),
                         ),
@@ -425,16 +426,16 @@ class _PartiesPageState extends State<PartiesPage> {
                       height: 56,
                       padding: const EdgeInsets.symmetric(horizontal: 12),
                       decoration: BoxDecoration(
-                        color: const Color(0xFF0F171E),
+                        color: BBTheme.black3,
                         borderRadius: BorderRadius.circular(9),
                         border: Border.all(
-                          color: const Color(0xFF25313B),
+                          color: BBTheme.border,
                         ),
                       ),
                       child: DropdownButtonHideUnderline(
                         child: DropdownButton<bool?>(
                           value: _activeFilter,
-                          dropdownColor: const Color(0xFF111A22),
+                          dropdownColor: BBTheme.panel,
                           borderRadius: BorderRadius.circular(10),
                           icon: const Icon(
                             Icons.keyboard_arrow_down,
@@ -482,7 +483,7 @@ class _PartiesPageState extends State<PartiesPage> {
 
                     child: CircularProgressIndicator(
 
-                      color: Color(0xFF00BFA6),
+                      color: BBTheme.red,
 
                     ),
 
@@ -748,13 +749,13 @@ class _PartyStatCard extends StatelessWidget {
 
       decoration: BoxDecoration(
 
-        color: const Color(0xFF111A22),
+        color: BBTheme.panel,
 
         borderRadius: BorderRadius.circular(12),
 
         border: Border.all(
 
-          color: const Color(0xFF1E2A34),
+          color: BBTheme.border,
 
         ),
 
@@ -772,7 +773,7 @@ class _PartyStatCard extends StatelessWidget {
 
             decoration: BoxDecoration(
 
-              color: const Color(0xFF00BFA6).withValues(
+              color: BBTheme.red.withValues(
 
                 alpha: 0.12,
 
@@ -786,7 +787,7 @@ class _PartyStatCard extends StatelessWidget {
 
               icon,
 
-              color: const Color(0xFF00BFA6),
+              color: BBTheme.red,
 
               size: 21,
 
@@ -808,7 +809,7 @@ class _PartyStatCard extends StatelessWidget {
 
                 style: const TextStyle(
 
-                  color: Color(0xFF84919D),
+                  color: BBTheme.muted,
 
                   fontSize: 11,
 
@@ -918,7 +919,7 @@ class _PartyTable extends StatelessWidget {
 
                           Icons.business_outlined,
 
-                          color: Color(0xFF00BFA6),
+                          color: BBTheme.red,
 
                           size: 18,
 
@@ -1016,7 +1017,7 @@ class _PartyTable extends StatelessWidget {
 
               decoration: BoxDecoration(
 
-                color: const Color(0xFF0F171E),
+                color: BBTheme.black3,
 
                 borderRadius: BorderRadius.circular(8),
 
@@ -1146,7 +1147,7 @@ class _PartyTable extends StatelessWidget {
 
                                   Icons.business_outlined,
 
-                                  color: Color(0xFF00BFA6),
+                                  color: BBTheme.red,
 
                                   size: 17,
 
@@ -1354,7 +1355,7 @@ class _RoleChip extends StatelessWidget {
 
       decoration: BoxDecoration(
 
-        color: const Color(0xFF00BFA6).withValues(
+        color: BBTheme.red.withValues(
 
           alpha: 0.10,
 
@@ -1517,7 +1518,7 @@ class _PartyDetailsDialogState
       context: context,
       builder: (context) {
         return AlertDialog(
-          backgroundColor: const Color(0xFF111A22),
+          backgroundColor: BBTheme.panel,
           title: const Text('Reactivate Party?'),
           content: Text(
             'Are you sure you want to reactivate '
@@ -1604,7 +1605,7 @@ class _PartyDetailsDialogState
 
         return AlertDialog(
 
-          backgroundColor: const Color(0xFF111A22),
+          backgroundColor: BBTheme.panel,
 
           title: const Text('Deactivate Party?'),
 
@@ -1730,7 +1731,7 @@ class _PartyDetailsDialogState
 
     return Dialog(
 
-      backgroundColor: const Color(0xFF111A22),
+      backgroundColor: BBTheme.panel,
 
       insetPadding: const EdgeInsets.all(24),
 
@@ -1840,7 +1841,7 @@ class _PartyDetailsDialogState
 
               height: 1,
 
-              color: Color(0xFF25313B),
+              color: BBTheme.border,
 
             ),
 
@@ -2132,7 +2133,7 @@ class _PartyDetailsDialogState
 
               height: 1,
 
-              color: Color(0xFF25313B),
+              color: BBTheme.border,
 
             ),
 
@@ -2222,7 +2223,7 @@ class _PartyDetailsDialogState
 
                       backgroundColor:
 
-                          const Color(0xFF00BFA6),
+                          BBTheme.red,
 
                       foregroundColor: Colors.white,
 
@@ -2286,7 +2287,7 @@ class _DetailsSection extends StatelessWidget {
 
               size: 18,
 
-              color: const Color(0xFF00BFA6),
+              color: BBTheme.red,
 
             ),
 
@@ -2320,13 +2321,13 @@ class _DetailsSection extends StatelessWidget {
 
           decoration: BoxDecoration(
 
-            color: const Color(0xFF0F171E),
+            color: BBTheme.black3,
 
             borderRadius: BorderRadius.circular(10),
 
             border: Border.all(
 
-              color: const Color(0xFF1E2A34),
+              color: BBTheme.border,
 
             ),
 
@@ -2592,7 +2593,7 @@ class _PartyFormDialogState
 
       filled: true,
 
-      fillColor: const Color(0xFF0F171E),
+      fillColor: BBTheme.black3,
 
       border: OutlineInputBorder(
 
@@ -2600,7 +2601,7 @@ class _PartyFormDialogState
 
         borderSide: const BorderSide(
 
-          color: Color(0xFF25313B),
+          color: BBTheme.border,
 
         ),
 
@@ -2612,7 +2613,7 @@ class _PartyFormDialogState
 
         borderSide: const BorderSide(
 
-          color: Color(0xFF25313B),
+          color: BBTheme.border,
 
         ),
 
@@ -2624,7 +2625,7 @@ class _PartyFormDialogState
 
         borderSide: const BorderSide(
 
-          color: Color(0xFF00BFA6),
+          color: BBTheme.red,
 
         ),
 
@@ -2810,7 +2811,7 @@ class _PartyFormDialogState
 
     return Dialog(
 
-      backgroundColor: const Color(0xFF111A22),
+      backgroundColor: BBTheme.panel,
 
       insetPadding: const EdgeInsets.all(24),
 
@@ -2922,7 +2923,7 @@ class _PartyFormDialogState
 
               height: 1,
 
-              color: Color(0xFF25313B),
+              color: BBTheme.border,
 
             ),
 
@@ -3054,17 +3055,17 @@ class _PartyFormDialogState
 
                             selectedColor:
 
-                                const Color(0xFF00BFA6)
+                                BBTheme.red
 
                                     .withValues(alpha: 0.18),
 
                             checkmarkColor:
 
-                                const Color(0xFF00BFA6),
+                                BBTheme.red,
 
                             side: const BorderSide(
 
-                              color: Color(0xFF25313B),
+                              color: BBTheme.border,
 
                             ),
 
@@ -3492,7 +3493,7 @@ class _PartyFormDialogState
 
               height: 1,
 
-              color: Color(0xFF25313B),
+              color: BBTheme.border,
 
             ),
 
@@ -3532,7 +3533,7 @@ class _PartyFormDialogState
 
                       backgroundColor:
 
-                          const Color(0xFF00BFA6),
+                          BBTheme.red,
 
                       foregroundColor: Colors.white,
 
@@ -3626,7 +3627,7 @@ class _FormSectionTitle extends StatelessWidget {
 
           size: 18,
 
-          color: const Color(0xFF00BFA6),
+          color: BBTheme.red,
 
         ),
 
@@ -3678,13 +3679,13 @@ class _DashboardCard extends StatelessWidget {
 
       decoration: BoxDecoration(
 
-        color: const Color(0xFF111A22),
+        color: BBTheme.panel,
 
         borderRadius: BorderRadius.circular(12),
 
         border: Border.all(
 
-          color: const Color(0xFF1E2A34),
+          color: BBTheme.border,
 
         ),
 
