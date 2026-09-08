@@ -166,27 +166,6 @@ async function ensureCustomerCompanies() {
           ON CONFLICT (company_id, code) DO NOTHING
         `, [companyId, fyCode, fyName, fyStart, fyEnd]);
       }
-
-      // Every company must have at least one active stock location.
-      // Customer companies are bridged automatically, so create a safe
-      // default MAIN store only when that company has no active location.
-      const activeLocation = await client.query(`
-        SELECT id
-        FROM master.locations
-        WHERE company_id = $1
-          AND COALESCE(is_active, true) = true
-        LIMIT 1
-      `, [companyId]);
-
-      if (activeLocation.rows.length === 0) {
-        await client.query(`
-          INSERT INTO master.locations (
-            company_id, code, name, location_type, is_active
-          )
-          VALUES ($1, 'MAIN', 'Main Store', 'STORE', true)
-          ON CONFLICT (company_id, code) DO NOTHING
-        `, [companyId]);
-      }
     }
 
     await client.query('COMMIT');
@@ -292,9 +271,8 @@ router.get('/colors', async (req, res) => {
 // ============================================================
 // LOCATIONS
 //
-// Returns all active physical stock locations.
-// Locations are storage points in the factory and may hold B&B-owned
-// as well as customer-owned yarn, so they are NOT filtered by owner company.
+// Locations are physical storage points. They are shared by B&B and
+// customer-owned yarn, so they must NOT be filtered by owner company.
 // GET /api/yarn-receipts/locations
 // ============================================================
 
@@ -429,6 +407,425 @@ router.get('/', async (req, res) => {
       error: 'Failed to load yarn receipts',
       details: error.message,
     });
+  }
+});
+
+
+// ============================================================
+// YARN STOCK FOR ISSUE
+//
+// GET /api/yarn-receipts/stock
+// Returns positive-balance stock by lot + location.
+// ============================================================
+router.get('/stock', async (req, res) => {
+  try {
+    const result = await pool.query(`
+      SELECT
+        yl.id AS yarn_lot_id,
+        yl.lot_no,
+        yl.supplier_lot_no,
+        yl.received_date,
+
+        yl.company_id,
+        COALESCE(owner.name, '') AS owner_name,
+
+        yl.yarn_id,
+        y.code AS yarn_code,
+        y.name AS yarn_name,
+        y.count AS yarn_count,
+        y.composition,
+
+        yl.color_id,
+        COALESCE(ccol.code, '') AS color_code,
+        COALESCE(ccol.name, '') AS color_name,
+
+        yl.supplier_party_id,
+        COALESCE(sp.name, '') AS supplier_name,
+
+        yl_loc.location_id,
+        COALESCE(loc.name, '') AS location_name,
+
+        COALESCE(SUM(l.quantity_in), 0)::float AS quantity_in,
+        COALESCE(SUM(l.quantity_out), 0)::float AS quantity_out,
+        COALESCE(SUM(l.quantity_in - l.quantity_out), 0)::float AS balance
+      FROM master.yarn_lots yl
+      JOIN master.yarns y
+        ON y.id = yl.yarn_id
+      LEFT JOIN master.colors ccol
+        ON ccol.id = yl.color_id
+      LEFT JOIN master.parties sp
+        ON sp.id = yl.supplier_party_id
+      LEFT JOIN core.companies owner
+        ON owner.id = yl.company_id
+      JOIN (
+        SELECT DISTINCT yarn_lot_id, location_id
+        FROM inventory.yarn_ledger
+        WHERE location_id IS NOT NULL
+      ) yl_loc
+        ON yl_loc.yarn_lot_id = yl.id
+      LEFT JOIN master.locations loc
+        ON loc.id = yl_loc.location_id
+      LEFT JOIN inventory.yarn_ledger l
+        ON l.yarn_lot_id = yl.id
+       AND l.location_id = yl_loc.location_id
+      GROUP BY
+        yl.id,
+        yl.lot_no,
+        yl.supplier_lot_no,
+        yl.received_date,
+        yl.company_id,
+        owner.name,
+        yl.yarn_id,
+        y.code,
+        y.name,
+        y.count,
+        y.composition,
+        yl.color_id,
+        ccol.code,
+        ccol.name,
+        yl.supplier_party_id,
+        sp.name,
+        yl_loc.location_id,
+        loc.name
+      HAVING COALESCE(SUM(l.quantity_in - l.quantity_out), 0) > 0
+      ORDER BY y.name ASC, ccol.name ASC, yl.lot_no ASC, loc.name ASC
+    `);
+
+    return res.json({
+      success: true,
+      stock: result.rows,
+    });
+  } catch (error) {
+    console.error('Yarn issue stock error:', error);
+    return res.status(500).json({
+      success: false,
+      error: 'Failed to load yarn stock for issue.',
+      details: error.message,
+    });
+  }
+});
+
+// ============================================================
+// RECENT YARN MOVEMENTS
+//
+// GET /api/yarn-receipts/movements?limit=50
+// ============================================================
+router.get('/movements', async (req, res) => {
+  try {
+    const requestedLimit = Number(req.query.limit);
+    const limit = Number.isInteger(requestedLimit)
+      ? Math.min(Math.max(requestedLimit, 1), 200)
+      : 50;
+
+    const result = await pool.query(`
+      SELECT
+        l.id,
+        l.movement_date,
+        l.created_at,
+        l.movement_type,
+        l.quantity_in::float AS quantity_in,
+        l.quantity_out::float AS quantity_out,
+        l.reference_type,
+        l.reference_id,
+        l.remarks,
+
+        l.company_id,
+        COALESCE(owner.name, '') AS owner_name,
+
+        l.location_id,
+        COALESCE(loc.name, '') AS location_name,
+
+        yl.id AS yarn_lot_id,
+        yl.lot_no,
+        yl.supplier_lot_no,
+
+        y.id AS yarn_id,
+        y.code AS yarn_code,
+        y.name AS yarn_name,
+        y.count AS yarn_count,
+        y.composition,
+
+        yl.color_id,
+        COALESCE(ccol.code, '') AS color_code,
+        COALESCE(ccol.name, '') AS color_name,
+
+        COALESCE(j.job_no, '') AS job_no
+      FROM inventory.yarn_ledger l
+      JOIN master.yarn_lots yl
+        ON yl.id = l.yarn_lot_id
+      JOIN master.yarns y
+        ON y.id = yl.yarn_id
+      LEFT JOIN master.colors ccol
+        ON ccol.id = yl.color_id
+      LEFT JOIN core.companies owner
+        ON owner.id = l.company_id
+      LEFT JOIN master.locations loc
+        ON loc.id = l.location_id
+      LEFT JOIN job_orders j
+        ON l.reference_type = 'YARN_ISSUE'
+       AND l.reference_id::text = j.id::text
+      ORDER BY l.created_at DESC NULLS LAST, l.movement_date DESC, l.id DESC
+      LIMIT $1
+    `, [limit]);
+
+    return res.json({
+      success: true,
+      movements: result.rows,
+    });
+  } catch (error) {
+    console.error('Yarn movements error:', error);
+    return res.status(500).json({
+      success: false,
+      error: 'Failed to load yarn movements.',
+      details: error.message,
+    });
+  }
+});
+
+// ============================================================
+// ISSUE YARN - MULTIPLE JOBS / MULTIPLE YARNS
+//
+// POST /api/yarn-receipts/issue-batch
+//
+// Each entry:
+//   job_id
+//   yarn_lot_id
+//   location_id
+//   quantity
+//   remarks (optional)
+//
+// Every entry is written to the same inventory yarn ledger used
+// by receipts, so stock remains fully traceable.
+// ============================================================
+router.post('/issue-batch', async (req, res) => {
+  const entries = Array.isArray(req.body?.entries)
+    ? req.body.entries
+    : [];
+  const issueDate = clean(req.body?.issue_date ?? req.body?.issueDate);
+
+  if (entries.length === 0) {
+    return res.status(400).json({
+      success: false,
+      error: 'At least one yarn issue line is required.',
+    });
+  }
+
+  if (issueDate && !/^\d{4}-\d{2}-\d{2}$/.test(issueDate)) {
+    return res.status(400).json({
+      success: false,
+      error: 'Issue date must be in YYYY-MM-DD format.',
+    });
+  }
+
+  const client = await pool.connect();
+
+  try {
+    await client.query('BEGIN');
+
+    const saved = [];
+
+    for (const raw of entries) {
+      const jobId = Number(raw?.job_id ?? raw?.jobId);
+      const yarnLotId = clean(raw?.yarn_lot_id ?? raw?.yarnLotId);
+      const locationId = clean(raw?.location_id ?? raw?.locationId);
+      const quantity = Number(raw?.quantity);
+      const remarks = clean(raw?.remarks);
+
+      if (!Number.isInteger(jobId) || jobId <= 0) {
+        throw new Error('Invalid job ID in yarn issue batch.');
+      }
+
+      if (!yarnLotId || !isUuid(yarnLotId)) {
+        throw new Error('Invalid yarn lot ID in yarn issue batch.');
+      }
+
+      if (!locationId || !isUuid(locationId)) {
+        throw new Error('A valid stock location is required for every issue line.');
+      }
+
+      if (!Number.isFinite(quantity) || quantity <= 0) {
+        throw new Error('Yarn issue quantity must be greater than zero.');
+      }
+
+      const job = await client.query(`
+        SELECT id, job_no, party_id
+        FROM job_orders
+        WHERE id = $1
+        LIMIT 1
+      `, [jobId]);
+
+      if (job.rows.length === 0) {
+        throw new Error(`Job order ${jobId} was not found.`);
+      }
+
+      const lot = await client.query(`
+        SELECT
+          yl.id,
+          yl.company_id,
+          yl.yarn_id,
+          yl.lot_no,
+          yl.color_id,
+          y.name AS yarn_name,
+          COALESCE(ccol.name, '') AS color_name
+        FROM master.yarn_lots yl
+        JOIN master.yarns y
+          ON y.id = yl.yarn_id
+        LEFT JOIN master.colors ccol
+          ON ccol.id = yl.color_id
+        WHERE yl.id = $1
+        LIMIT 1
+      `, [yarnLotId]);
+
+      if (lot.rows.length === 0) {
+        throw new Error(`Yarn lot ${yarnLotId} was not found.`);
+      }
+
+      const lotRow = lot.rows[0];
+
+      const location = await client.query(`
+        SELECT id, name
+        FROM master.locations
+        WHERE id = $1
+          AND COALESCE(is_active, true) = true
+        LIMIT 1
+      `, [locationId]);
+
+      if (location.rows.length === 0) {
+        throw new Error('Selected yarn stock location was not found or is inactive.');
+      }
+
+      const balanceResult = await client.query(`
+        SELECT COALESCE(SUM(quantity_in - quantity_out), 0)::float AS balance
+        FROM inventory.yarn_ledger
+        WHERE yarn_lot_id = $1
+          AND location_id = $2
+      `, [yarnLotId, locationId]);
+
+      const balance = Number(balanceResult.rows[0].balance || 0);
+
+      if (balance + 0.000001 < quantity) {
+        throw new Error(
+          `Insufficient stock for ${lotRow.yarn_name} / ${lotRow.lot_no}. Available: ${balance.toFixed(2)} kg.`
+        );
+      }
+
+      // If this job has yarn requirements, ensure the selected yarn is one
+      // of the requested yarns. Jobs without a requirement remain issuable.
+      const requirement = await client.query(`
+        SELECT 1
+        FROM job_order_yarns joy
+        JOIN master.yarns jy
+          ON LOWER(TRIM(jy.name)) = LOWER(TRIM(joy.yarn_name))
+         AND (
+           joy.yarn_count IS NULL
+           OR TRIM(joy.yarn_count) = ''
+           OR LOWER(TRIM(jy.count)) = LOWER(TRIM(joy.yarn_count))
+         )
+        WHERE joy.job_order_id = $1
+          AND jy.id = $2
+        LIMIT 1
+      `, [jobId, lotRow.yarn_id]);
+
+      const anyRequirements = await client.query(`
+        SELECT 1
+        FROM job_order_yarns
+        WHERE job_order_id = $1
+        LIMIT 1
+      `, [jobId]);
+
+      if (anyRequirements.rows.length > 0 && requirement.rows.length === 0) {
+        throw new Error(
+          `${lotRow.yarn_name} is not one of the yarns required for job ${job.rows[0].job_no}.`
+        );
+      }
+
+      const result = await client.query(`
+        INSERT INTO inventory.yarn_ledger (
+          company_id,
+          financial_year_id,
+          yarn_lot_id,
+          location_id,
+          movement_date,
+          movement_type,
+          quantity_in,
+          quantity_out,
+          reference_type,
+          reference_id,
+          remarks
+        )
+        SELECT
+          $1,
+          fy.id,
+          $2,
+          $3,
+          COALESCE($6::date, CURRENT_DATE),
+          'ISSUE',
+          0,
+          $4,
+          'YARN_ISSUE',
+          $5,
+          $7
+        FROM core.financial_years fy
+        WHERE fy.company_id = $1
+          AND fy.is_current = true
+          AND fy.is_closed = false
+        ORDER BY fy.start_date DESC
+        LIMIT 1
+        RETURNING
+          id,
+          movement_date,
+          movement_type,
+          quantity_out,
+          reference_id,
+          remarks
+      `, [
+        lotRow.company_id,
+        yarnLotId,
+        locationId,
+        quantity,
+        jobId,
+        remarks,
+        issueDate,
+      ]);
+
+      if (result.rows.length === 0) {
+        throw new Error(
+          `No open financial year exists for yarn stock owner of ${lotRow.yarn_name}.`
+        );
+      }
+
+      saved.push({
+        ...result.rows[0],
+        job_id: jobId,
+        job_no: job.rows[0].job_no,
+        yarn_lot_id: yarnLotId,
+        yarn_id: lotRow.yarn_id,
+        yarn_name: lotRow.yarn_name,
+        color_name: lotRow.color_name,
+        location_id: locationId,
+        location_name: location.rows[0].name,
+        quantity: quantity,
+      });
+    }
+
+    await client.query('COMMIT');
+
+    return res.status(201).json({
+      success: true,
+      count: saved.length,
+      message: `Yarn issue posted successfully. ${saved.length} line(s) saved.`,
+      issues: saved,
+    });
+  } catch (error) {
+    await client.query('ROLLBACK');
+    console.error('Yarn issue batch failed:', error);
+
+    return res.status(500).json({
+      success: false,
+      error: error.message || 'Failed to post yarn issue batch.',
+    });
+  } finally {
+    client.release();
   }
 });
 
@@ -902,30 +1299,21 @@ router.post('/', async (req, res) => {
     // LOCATION
     // ========================================================
 
-    if (!locationId || !isUuid(locationId)) {
-      throw new Error('Location is required. Select a valid stock location.');
-    }
-
-    {
+    if (locationId) {
       const location = await client.query(
         `
         SELECT id
-
         FROM master.locations
-
         WHERE id = $1
           AND COALESCE(is_active, true) = true
-
         LIMIT 1
         `,
-        [
-          locationId,
-        ]
+        [locationId]
       );
 
       if (location.rows.length === 0) {
         throw new Error(
-          'Selected location does not belong to the selected company.'
+          'Selected location does not exist or is inactive.'
         );
       }
     }

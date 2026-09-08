@@ -556,7 +556,8 @@ class _YarnMovementRowLive extends StatelessWidget {
     final lot = '${movement['lot_no'] ?? ''}'.trim();
     final location = '${movement['location_name'] ?? ''}'.trim();
     final qty = isIn ? inQty : outQty;
-    final date = _formatMovementDate('${movement['movement_date'] ?? ''}');
+    final timestamp = '${movement['created_at'] ?? movement['createdAt'] ?? movement['movement_date'] ?? ''}';
+    final date = _formatMovementDateTime(timestamp);
 
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 13),
@@ -724,11 +725,23 @@ class _YarnMovementDialogState extends State<_YarnMovementDialog> {
   }
 }
 
-String _formatMovementDate(String raw) {
+String _formatMovementDateTime(String raw) {
   if (raw.trim().isEmpty) return '—';
+
   final parsed = DateTime.tryParse(raw);
-  if (parsed == null) return raw.length > 10 ? raw.substring(0, 10) : raw;
-  return '${parsed.day.toString().padLeft(2, '0')}/${parsed.month.toString().padLeft(2, '0')}/${parsed.year}';
+  if (parsed == null) {
+    return raw.length > 19 ? raw.substring(0, 19) : raw;
+  }
+
+  final hour24 = parsed.hour;
+  final period = hour24 >= 12 ? 'PM' : 'AM';
+  final hour12 = hour24 % 12 == 0 ? 12 : hour24 % 12;
+
+  return '${parsed.day.toString().padLeft(2, '0')}/'
+      '${parsed.month.toString().padLeft(2, '0')}/'
+      '${parsed.year} • '
+      '${hour12.toString().padLeft(2, '0')}:'
+      '${parsed.minute.toString().padLeft(2, '0')} $period';
 }
 
 
@@ -745,10 +758,10 @@ class _YarnIssueLine {
 
 class _YarnIssueJobGroup {
   final JobOrder job;
-  Set<String> requiredYarnIds;
+  Set<String> requiredYarnIds = <String>{};
   final List<_YarnIssueLine> lines = [];
 
-  _YarnIssueJobGroup({required this.job, this.requiredYarnIds = const {}}) {
+  _YarnIssueJobGroup({required this.job}) {
     lines.add(_YarnIssueLine());
   }
 

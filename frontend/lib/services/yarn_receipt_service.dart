@@ -187,11 +187,13 @@ class YarnReceiptApi {
   // Locations
   // ------------------------------------------------------------
   Future<List<YarnReceiptLocation>> getLocations({String? companyId}) async {
-    // Locations are physical storage points and are shared across owner
-    // companies. The optional companyId is retained for API compatibility.
-    final r = await _client.get(
-      Uri.parse('$baseUrl/yarn-receipts/locations'),
+    final uri = Uri.parse('$baseUrl/yarn-receipts/locations').replace(
+      queryParameters: companyId == null || companyId.trim().isEmpty
+          ? null
+          : {'company_id': companyId.trim()},
     );
+
+    final r = await _client.get(uri);
     _check(r);
 
     final decoded = jsonDecode(r.body);
@@ -302,6 +304,93 @@ class YarnReceiptApi {
     return list
         .map((e) => Map<String, dynamic>.from(e as Map))
         .toList();
+  }
+
+
+  // ------------------------------------------------------------
+  // Live yarn stock available for issue.
+  // One row represents a yarn lot at a specific location.
+  // ------------------------------------------------------------
+  Future<List<Map<String, dynamic>>> getYarnStock() async {
+    final r = await _client.get(
+      Uri.parse('$baseUrl/yarn-receipts/stock'),
+    );
+    _check(r);
+
+    final decoded = jsonDecode(r.body);
+    final List<dynamic> list;
+
+    if (decoded is List) {
+      list = decoded;
+    } else if (decoded is Map<String, dynamic> && decoded['stock'] is List) {
+      list = decoded['stock'] as List<dynamic>;
+    } else {
+      list = <dynamic>[];
+    }
+
+    return list
+        .whereType<Map>()
+        .map((e) => Map<String, dynamic>.from(e))
+        .toList();
+  }
+
+  // ------------------------------------------------------------
+  // Live yarn movement ledger.
+  // ------------------------------------------------------------
+  Future<List<Map<String, dynamic>>> getYarnMovements({int limit = 50}) async {
+    final safeLimit = limit.clamp(1, 200);
+    final uri = Uri.parse('$baseUrl/yarn-receipts/movements').replace(
+      queryParameters: {'limit': safeLimit.toString()},
+    );
+
+    final r = await _client.get(uri);
+    _check(r);
+
+    final decoded = jsonDecode(r.body);
+    final List<dynamic> list;
+
+    if (decoded is List) {
+      list = decoded;
+    } else if (decoded is Map<String, dynamic> && decoded['movements'] is List) {
+      list = decoded['movements'] as List<dynamic>;
+    } else {
+      list = <dynamic>[];
+    }
+
+    return list
+        .whereType<Map>()
+        .map((e) => Map<String, dynamic>.from(e))
+        .toList();
+  }
+
+  // ------------------------------------------------------------
+  // Multiple jobs / multiple yarns in one posting.
+  // ------------------------------------------------------------
+  Future<Map<String, dynamic>> issueYarnBatch({
+    required List<Map<String, dynamic>> entries,
+    String? issueDate,
+  }) async {
+    if (entries.isEmpty) {
+      throw Exception('At least one yarn issue line is required.');
+    }
+
+    final r = await _client.post(
+      Uri.parse('$baseUrl/yarn-receipts/issue-batch'),
+      headers: const {'Content-Type': 'application/json'},
+      body: jsonEncode({
+        'issue_date': _clean(issueDate),
+        'entries': entries,
+      }),
+    );
+
+    _check(r);
+
+    final decoded = jsonDecode(r.body);
+    if (decoded is Map<String, dynamic>) {
+      return decoded;
+    }
+
+    return {'success': true, 'issues': decoded};
   }
 
   String? _clean(String? value) {
