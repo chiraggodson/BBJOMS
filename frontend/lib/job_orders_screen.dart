@@ -1779,18 +1779,19 @@ class _NewJobOrderDialogState
       }
 
       final jobYarns = _selectedYarns
-          .where(
-            (item) =>
-                item.quantity != null &&
-                item.quantity! > 0,
-          )
-          .map(
-            (item) => JobYarnRequirement(
-              yarnId: item.yarn.id,
-              quantity: item.quantity,
-            ),
-          )
-          .toList();
+    .where(
+      (item) =>
+          item.yarn != null &&
+          item.quantity != null &&
+          item.quantity! > 0,
+    )
+    .map(
+      (item) => JobYarnRequirement(
+        yarnId: item.yarn!.id,
+        quantity: item.quantity,
+      ),
+    )
+    .toList();
 
       final jobNumbers =
           await widget.apiService.createJob(
@@ -1837,27 +1838,27 @@ class _NewJobOrderDialogState
   }
 
   void _addYarn() {
-    if (_yarns.isEmpty) return;
+  if (_yarns.isEmpty) return;
 
-    final available = _yarns.where(
-      (yarn) => !_selectedYarns.any(
-        (selected) => selected.yarn.id == yarn.id,
+  final available = _yarns.where(
+    (yarn) => !_selectedYarns.any(
+      (selected) => selected.yarn?.id == yarn.id,
+    ),
+  );
+
+  if (available.isEmpty) {
+    _showError('All available yarns are already added.');
+    return;
+  }
+
+  setState(() {
+    _selectedYarns.add(
+      _SelectedJobYarn(
+        yarn: null,
       ),
     );
-
-    if (available.isEmpty) {
-      _showError('All available yarns are already added.');
-      return;
-    }
-
-    setState(() {
-      _selectedYarns.add(
-        _SelectedJobYarn(
-          yarn: available.first,
-        ),
-      );
-    });
-  }
+  });
+}
 
   @override
   Widget build(BuildContext context) {
@@ -2051,9 +2052,11 @@ class _NewJobOrderDialogState
                       controller: _quantityController,
                       label: 'Order Quantity (kg) *',
                       hint: 'Example: 1000',
+                      
                       keyboardType:
                           const TextInputType.numberWithOptions(
                         decimal: true,
+                        
                       ),
                     ),
                   ),
@@ -2152,15 +2155,80 @@ class _NewJobOrderDialogState
                 ),
               ),
             )
-          else
+                    else
             Column(
-              children: _selectedYarns.map((item) {
-                return Padding(
-                  padding:
-                      const EdgeInsets.only(bottom: 10),
-                  child: _buildYarnRow(item),
-                );
-              }).toList(),
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                ..._selectedYarns.map((item) {
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 10),
+                    child: _buildYarnRow(item),
+                  );
+                }),
+
+                Builder(
+                  builder: (context) {
+                    final totalYarnPercentage =
+                        _selectedYarns.fold<double>(
+                      0,
+                      (total, item) =>
+                          total + (item.percentage ?? 0),
+                    );
+
+                    final isComplete =
+                        (totalYarnPercentage - 100).abs() < 0.001;
+
+                    return Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 14,
+                        vertical: 12,
+                      ),
+                      decoration: BoxDecoration(
+                        color: _panel2,
+                        borderRadius: BorderRadius.circular(9),
+                        border: Border.all(
+                          color: isComplete
+                              ? BBTheme.green
+                              : _border,
+                        ),
+                      ),
+                      child: Row(
+                        children: [
+                          const Text(
+                            'Total Yarn %',
+                            style: TextStyle(
+                              color: _muted,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          const Spacer(),
+                          Text(
+                            '${_formatNumber(totalYarnPercentage)}%',
+                            style: TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w700,
+                              color: isComplete
+                                  ? BBTheme.green
+                                  : const Color(0xFFFBBF24),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Icon(
+                            isComplete
+                                ? Icons.check_circle_outline
+                                : Icons.warning_amber_outlined,
+                            size: 18,
+                            color: isComplete
+                                ? BBTheme.green
+                                : const Color(0xFFFBBF24),
+                          ),
+                        ],
+                      ),
+                    );
+                  },
+                ),
+              ],
             ),
 
           const SizedBox(height: 30),
@@ -2218,71 +2286,148 @@ class _NewJobOrderDialogState
   }
 
   Widget _buildYarnRow(
-    _SelectedJobYarn item,
-  ) {
-    final quantityController =
-        TextEditingController(
-      text: item.quantity == null
-          ? ''
-          : item.quantity.toString(),
-    );
+  _SelectedJobYarn item,
+) {
+  final quantityController = TextEditingController(
+    text: item.percentage == null
+        ? ''
+        : _formatNumber(item.percentage!),
+  );
 
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: _panel2,
-        borderRadius:
-            BorderRadius.circular(9),
-        border:
-            Border.all(color: _border),
-      ),
-      child: Row(
-        children: [
-          Expanded(
+  final selectedYarnIds = _selectedYarns
+      .where(
+        (selected) =>
+            selected != item && selected.yarn != null,
+      )
+      .map(
+        (selected) => selected.yarn!.id,
+      )
+      .toSet();
+
+  final orderQuantity = double.tryParse(
+    _quantityController.text.trim(),
+  ) ?? 0;
+
+  final calculatedKg =
+      orderQuantity > 0 && item.percentage != null
+          ? orderQuantity * item.percentage! / 100
+          : null;
+
+  return Container(
+    padding: const EdgeInsets.all(12),
+    decoration: BoxDecoration(
+      color: _panel2,
+      borderRadius: BorderRadius.circular(9),
+      border: Border.all(color: _border),
+    ),
+    child: Row(
+      children: [
+        Expanded(
+          child: DropdownButtonFormField<YarnMaster>(
+            value: item.yarn,
+            isExpanded: true,
+            decoration: const InputDecoration(
+              labelText: 'Yarn',
+              isDense: true,
+            ),
+            hint: const Text('Select yarn'),
+            items: _yarns
+                .where(
+                  (yarn) =>
+                      !selectedYarnIds.contains(yarn.id) ||
+                      yarn.id == item.yarn?.id,
+                )
+                .map(
+                  (yarn) => DropdownMenuItem<YarnMaster>(
+                    value: yarn,
+                    child: Text(
+                      '${yarn.yarnName} • ${yarn.yarnCount}',
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                )
+                .toList(),
+            onChanged: (value) {
+              setState(() {
+                item.yarn = value;
+              });
+            },
+          ),
+        ),
+
+        const SizedBox(width: 12),
+
+        SizedBox(
+          width: 100,
+          child: TextField(
+            controller: quantityController,
+            keyboardType:
+                const TextInputType.numberWithOptions(
+              decimal: true,
+            ),
+            onChanged: (value) {
+              final percentage =
+                  double.tryParse(value);
+
+              setState(() {
+                item.percentage = percentage;
+
+                item.quantity =
+                    orderQuantity > 0 &&
+                            percentage != null
+                        ? orderQuantity *
+                            percentage /
+                            100
+                        : null;
+              });
+            },
+            decoration: const InputDecoration(
+              labelText: 'Yarn %',
+              suffixText: '%',
+              isDense: true,
+            ),
+          ),
+        ),
+
+        const SizedBox(width: 12),
+
+        SizedBox(
+          width: 120,
+          child: InputDecorator(
+            decoration: const InputDecoration(
+              labelText: 'Required kg',
+              isDense: true,
+            ),
             child: Text(
-              '${item.yarn.yarnName} • ${item.yarn.yarnCount}',
+              calculatedKg == null
+                  ? '—'
+                  : '${_formatNumber(calculatedKg)} kg',
               style: const TextStyle(
-                fontSize: 12,
+                fontSize: 13,
                 fontWeight: FontWeight.w600,
               ),
             ),
           ),
-          SizedBox(
-            width: 150,
-            child: TextField(
-              controller: quantityController,
-              keyboardType:
-                  const TextInputType.numberWithOptions(
-                decimal: true,
-              ),
-              onChanged: (value) {
-                item.quantity =
-                    double.tryParse(value);
-              },
-              decoration:
-                  const InputDecoration(
-                labelText: 'Required kg',
-                isDense: true,
-              ),
-            ),
+        ),
+
+        const SizedBox(width: 8),
+
+        IconButton(
+          tooltip: 'Remove yarn',
+          onPressed: () {
+            setState(() {
+              _selectedYarns.remove(item);
+            });
+          },
+          icon: const Icon(
+            Icons.delete_outline,
+            color: Color(0xFFE57373),
           ),
-          const SizedBox(width: 8),
-          IconButton(
-            tooltip: 'Remove yarn',
-            onPressed: () {
-              setState(() {
-                _selectedYarns.remove(item);
-              });
-            },
-            icon: const Icon(
-              Icons.delete_outline,
-              color: Color(0xFFE57373),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
+        ),
+      ],
+    ),
+  );
+}
 
   Widget _sectionTitle(String text) {
     return Text(
@@ -2394,12 +2539,15 @@ class _NewJobOrderDialogState
 }
 
 class _SelectedJobYarn {
-  final YarnMaster yarn;
+   YarnMaster? yarn;
+
+  double? percentage;
   double? quantity;
 
   _SelectedJobYarn({
     required this.yarn,
-    this.quantity,
+        this.percentage,
+        this.quantity,
   });
 }
 
