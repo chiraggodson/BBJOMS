@@ -25,7 +25,13 @@ router.get("/", async (req, res) => {
         updated_at
       FROM machines
       WHERE is_active = TRUE
-      ORDER BY machine_no ASC
+      ORDER BY
+      CASE
+        WHEN TRIM(machine_no) ~ '^\d+$'
+          THEN CAST(TRIM(machine_no) AS INTEGER)
+        ELSE NULL
+      END ASC NULLS LAST,
+      machine_no ASC
     `);
 
     const machines = result.rows.map((machine) => {

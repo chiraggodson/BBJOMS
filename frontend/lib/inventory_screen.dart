@@ -564,7 +564,9 @@ class _ReceiveYarnDialogState extends State<_ReceiveYarnDialog> {
         _supplier = null;
         _company = selectedCompany;
         _suppliers = suppliers;
+        _colors = colors;
         _locations = locations;
+        
         _yarns = yarns;
         _loading = false;
       });
