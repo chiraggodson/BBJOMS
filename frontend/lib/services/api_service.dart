@@ -3,7 +3,7 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 
 class ApiService {
-  static const String baseUrl = 'http://192.168.1.20:4000/api';
+  static const String baseUrl = 'http://192.168.29.6:4000/api';
 
   // ============================================================
   // PARTIES
@@ -595,7 +595,7 @@ class ApiService {
 
   Future<JobDetails> getJobDetails(int id) async {
     final response = await http.get(
-      Uri.parse('$baseUrl/jobs/details/$id'),
+      Uri.parse('$baseUrl/jobs/$id'),
     );
 
     final decoded = _tryDecode(response.body);

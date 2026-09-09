@@ -690,6 +690,49 @@ router.post('/production-batch', async (req, res) => {
   }
 });
 
+router.get('/:jobNo/production-history', async (req, res) => {
+  try {
+    const { jobNo } = req.params;
+
+    const result = await pool.query(
+      `
+      SELECT
+        jp.id,
+        jp.job_order_id,
+        jp.machine_id,
+        jp.production_date,
+        jp.roll_no,
+        jp.quantity_kg,
+        jp.remarks,
+        jp.created_at
+      FROM job_production jp
+      JOIN job_orders jo
+        ON jo.id = jp.job_order_id
+      WHERE jo.job_no = $1
+      ORDER BY
+        jp.production_date DESC NULLS LAST,
+        jp.id DESC
+      `,
+      [jobNo],
+    );
+
+    res.json({
+      success: true,
+      history: result.rows,
+    });
+  } catch (error) {
+    console.error(
+      'Get production history failed:',
+      error,
+    );
+
+    res.status(500).json({
+      success: false,
+      message: error.message || 'Failed to load production history',
+    });
+  }
+});
+
 /*
  * GET /api/jobs/:id
  *
