@@ -1050,6 +1050,7 @@ class _JobDetailsDialog extends StatelessWidget {
                     ),
                     const SizedBox(height: 12),
                     _YarnRequirements(
+                      jobNo: job.jobNo,
                       yarns: details.yarns,
                     ),
                   ],
@@ -1425,16 +1426,89 @@ class _MachineList extends StatelessWidget {
   }
 }
 
-class _YarnRequirements extends StatelessWidget {
+class _YarnRequirements extends StatefulWidget {
+  final String jobNo;
   final List<JobYarnRequirement> yarns;
 
   const _YarnRequirements({
+    required this.jobNo,
     required this.yarns,
   });
 
   @override
+  State<_YarnRequirements> createState() => _YarnRequirementsState();
+}
+
+class _YarnRequirementsState extends State<_YarnRequirements> {
+  final ApiService _apiService = ApiService();
+
+  Map<String, double> _issuedByYarn = {};
+  bool _loadingIssued = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadIssued();
+  }
+
+  Future<void> _loadIssued() async {
+    try {
+      final history = await _apiService.getJobYarnHistory(widget.jobNo);
+
+      final issued = <String, double>{};
+
+      for (final entry in history) {
+        final type = entry.transactionType.trim().toLowerCase();
+
+        // The yarn history endpoint is the source of actual yarn
+        // movement. Count ISSUE/ISSUED transactions as yarn issued.
+        if (!type.contains('issue')) {
+          continue;
+        }
+
+        final key = _yarnKey(entry.yarnName);
+        if (key.isEmpty) continue;
+
+        issued[key] = (issued[key] ?? 0) + entry.quantity;
+      }
+
+      if (!mounted) return;
+
+      setState(() {
+        _issuedByYarn = issued;
+        _loadingIssued = false;
+      });
+    } catch (_) {
+      // Keep the requirements table usable if yarn history is not
+      // available. If the backend already supplies issuedQuantity,
+      // that value will still be used below.
+      if (!mounted) return;
+
+      setState(() {
+        _loadingIssued = false;
+      });
+    }
+  }
+
+  String _yarnKey(String value) {
+    return value.trim().toLowerCase();
+  }
+
+  double _issuedFor(JobYarnRequirement yarn) {
+    if (yarn.issuedQuantity != null) {
+      return yarn.issuedQuantity!;
+    }
+
+    final name = yarn.yarnName.isEmpty
+        ? 'Yarn ${yarn.yarnId}'
+        : yarn.yarnName;
+
+    return _issuedByYarn[_yarnKey(name)] ?? 0;
+  }
+
+  @override
   Widget build(BuildContext context) {
-    if (yarns.isEmpty) {
+    if (widget.yarns.isEmpty) {
       return const _EmptyDetailCard(
         'No yarn requirements recorded.',
       );
@@ -1452,7 +1526,7 @@ class _YarnRequirements extends StatelessWidget {
           Container(
             padding: const EdgeInsets.symmetric(
               horizontal: 16,
-              vertical: 11,
+              vertical: 12,
             ),
             decoration: BoxDecoration(
               color: _panel2,
@@ -1477,7 +1551,8 @@ class _YarnRequirements extends StatelessWidget {
                 Expanded(
                   flex: 3,
                   child: Text(
-                    'COUNT',
+                    'REQUIRED',
+                    textAlign: TextAlign.right,
                     style: TextStyle(
                       color: _muted,
                       fontSize: 9,
@@ -1486,10 +1561,23 @@ class _YarnRequirements extends StatelessWidget {
                     ),
                   ),
                 ),
-                SizedBox(
-                  width: 120,
+                Expanded(
+                  flex: 3,
                   child: Text(
-                    'REQUIRED',
+                    'ISSUED',
+                    textAlign: TextAlign.right,
+                    style: TextStyle(
+                      color: _muted,
+                      fontSize: 9,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: .8,
+                    ),
+                  ),
+                ),
+                Expanded(
+                  flex: 3,
+                  child: Text(
+                    'BALANCE',
                     textAlign: TextAlign.right,
                     style: TextStyle(
                       color: _muted,
@@ -1502,22 +1590,21 @@ class _YarnRequirements extends StatelessWidget {
               ],
             ),
           ),
-          ...List.generate(yarns.length, (index) {
-            final yarn = yarns[index];
+          ...List.generate(widget.yarns.length, (index) {
+            final yarn = widget.yarns[index];
+
             final name = yarn.yarnName.isEmpty
                 ? 'Yarn ${yarn.yarnId}'
                 : yarn.yarnName;
-            final count = yarn.yarnCount.isEmpty
-                ? '—'
-                : yarn.yarnCount;
-            final quantity = yarn.quantity == null
-                ? '—'
-                : '${_formatNumber(yarn.quantity!)} kg';
+
+            final required = yarn.quantity ?? 0;
+            final issued = _issuedFor(yarn);
+            final balance = required - issued;
 
             return Container(
               padding: const EdgeInsets.symmetric(
                 horizontal: 16,
-                vertical: 13,
+                vertical: 15,
               ),
               decoration: BoxDecoration(
                 border: Border(
@@ -1543,24 +1630,42 @@ class _YarnRequirements extends StatelessWidget {
                   Expanded(
                     flex: 3,
                     child: Text(
-                      count,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
+                      required <= 0
+                          ? '—'
+                          : '${_formatNumber(required)} kg',
+                      textAlign: TextAlign.right,
                       style: const TextStyle(
-                        color: _muted,
                         fontSize: 12,
-                        fontWeight: FontWeight.w600,
+                        fontWeight: FontWeight.w800,
                       ),
                     ),
                   ),
-                  SizedBox(
-                    width: 120,
+                  Expanded(
+                    flex: 3,
                     child: Text(
-                      quantity,
+                      _loadingIssued
+                          ? '—'
+                          : '${_formatNumber(issued)} kg',
                       textAlign: TextAlign.right,
                       style: const TextStyle(
-                        fontSize: 13,
+                        fontSize: 12,
                         fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ),
+                  Expanded(
+                    flex: 3,
+                    child: Text(
+                      _loadingIssued
+                          ? '—'
+                          : '${_formatNumber(balance)} kg',
+                      textAlign: TextAlign.right,
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w800,
+                        color: balance < 0
+                            ? const Color(0xFFF87171)
+                            : Colors.white,
                       ),
                     ),
                   ),

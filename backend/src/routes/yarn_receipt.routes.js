@@ -563,7 +563,7 @@ router.get('/movements', async (req, res) => {
         ON loc.id = l.location_id
       LEFT JOIN job_orders j
         ON l.reference_type = 'YARN_ISSUE'
-       AND l.reference_id::text = j.id::text
+       AND l.reference_id = md5('job:' || j.id::text)::uuid
       ORDER BY l.created_at DESC NULLS LAST, l.movement_date DESC, l.id DESC
       LIMIT $1
     `, [limit]);
@@ -712,7 +712,7 @@ router.post('/issue-batch', async (req, res) => {
       // If this job has yarn requirements, ensure the selected yarn is one
       // of the requested yarns. Jobs without a requirement remain issuable.
       const requirement = await client.query(`
-        SELECT 1
+        SELECT joy.id
         FROM job_order_yarns joy
         JOIN master.yarns jy
           ON LOWER(TRIM(jy.name)) = LOWER(TRIM(joy.yarn_name))
@@ -723,7 +723,9 @@ router.post('/issue-batch', async (req, res) => {
          )
         WHERE joy.job_order_id = $1
           AND jy.id = $2
+        ORDER BY joy.id
         LIMIT 1
+        FOR UPDATE OF joy
       `, [jobId, lotRow.yarn_id]);
 
       const anyRequirements = await client.query(`
@@ -763,7 +765,7 @@ router.post('/issue-batch', async (req, res) => {
           0,
           $4,
           'YARN_ISSUE',
-          $5,
+          md5('job:' || $5::text)::uuid,
           $7
         FROM core.financial_years fy
         WHERE fy.company_id = $1
@@ -792,6 +794,18 @@ router.post('/issue-batch', async (req, res) => {
         throw new Error(
           `No open financial year exists for yarn stock owner of ${lotRow.yarn_name}.`
         );
+      }
+
+      // Keep the job's yarn requirement in sync with the actual issue.
+      // The ledger remains the source of truth; this field is maintained
+      // for the Job Order UI and existing workflows.
+      if (requirement.rows.length > 0) {
+        await client.query(`
+          UPDATE job_order_yarns
+          SET issued_kg = COALESCE(issued_kg, 0) + $1,
+              updated_at = NOW()
+          WHERE id = $2
+        `, [quantity, requirement.rows[0].id]);
       }
 
       saved.push({

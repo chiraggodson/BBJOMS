@@ -169,7 +169,15 @@ async function getJobById(client, id) {
       joy.yarn_name,
       joy.yarn_count,
       joy.required_kg,
-      joy.issued_kg,
+      COALESCE((
+        SELECT SUM(l.quantity_out)
+        FROM inventory.yarn_ledger l
+        JOIN master.yarn_lots yl_issue
+          ON yl_issue.id = l.yarn_lot_id
+        WHERE l.reference_type = 'YARN_ISSUE'
+          AND l.reference_id = md5('job:' || $1::text)::uuid
+          AND yl_issue.yarn_id = ym.id
+      ), COALESCE(joy.issued_kg, 0)) AS issued_kg,
       joy.returned_kg,
       joy.waste_kg,
       joy.created_at,
@@ -184,7 +192,7 @@ async function getJobById(client, id) {
        OR LOWER(TRIM(ym.count)) = LOWER(TRIM(joy.yarn_count))
      )
 
-    WHERE joy.job_order_id = $1
+    WHERE joy.job_order_id = $1::bigint
 
     ORDER BY id
     `,
@@ -687,6 +695,64 @@ router.post('/production-batch', async (req, res) => {
     });
   } finally {
     client.release();
+  }
+});
+
+router.get('/:jobNo/yarn-history', async (req, res) => {
+  try {
+    const { jobNo } = req.params;
+
+    const result = await pool.query(
+      `
+      SELECT
+        l.id,
+        jo.id AS job_order_id,
+        jo.job_no,
+        l.movement_date,
+        l.created_at,
+        l.quantity_out::float AS quantity,
+        l.movement_type,
+        l.reference_type,
+        l.reference_id,
+        l.remarks,
+        l.location_id,
+        COALESCE(loc.name, '') AS location_name,
+        l.yarn_lot_id,
+        yl.lot_no,
+        y.id AS yarn_id,
+        y.name AS yarn_name,
+        y.count AS yarn_count,
+        COALESCE(cc.name, '') AS color_name
+      FROM inventory.yarn_ledger l
+      JOIN job_orders jo
+        ON jo.job_no = $1
+       AND l.reference_type = 'YARN_ISSUE'
+       AND l.reference_id = md5('job:' || jo.id::text)::uuid
+      JOIN master.yarn_lots yl
+        ON yl.id = l.yarn_lot_id
+      JOIN master.yarns y
+        ON y.id = yl.yarn_id
+      LEFT JOIN master.colors cc
+        ON cc.id = yl.color_id
+      LEFT JOIN master.locations loc
+        ON loc.id = l.location_id
+      WHERE l.quantity_out > 0
+      ORDER BY l.movement_date DESC, l.id DESC
+      `,
+      [jobNo],
+    );
+
+    return res.json({
+      success: true,
+      history: result.rows,
+    });
+  } catch (error) {
+    console.error('Get yarn history failed:', error);
+
+    return res.status(500).json({
+      success: false,
+      error: error.message || 'Failed to load yarn issue history',
+    });
   }
 });
 

@@ -72,8 +72,7 @@ class _FabricPageState extends State<FabricPage> {
 
     return _fabrics.where((fabric) {
       return fabric.name.toLowerCase().contains(query) ||
-          fabric.fabricCode.toLowerCase().contains(query) ||
-          fabric.composition.toLowerCase().contains(query);
+          fabric.fabricCode.toLowerCase().contains(query);
     }).toList();
   }
 
@@ -288,7 +287,7 @@ class _FabricPageState extends State<FabricPage> {
                     decoration:
                         InputDecoration(
                       hintText:
-                          'Search fabric, code or composition...',
+                          'Search fabric or code...',
                       prefixIcon:
                           const Icon(
                         Icons.search,
@@ -414,12 +413,6 @@ class _FabricFormDialogState
       _nameController;
   late final TextEditingController
       _descriptionController;
-  late final TextEditingController
-      _gsmController;
-  late final TextEditingController
-      _compositionController;
-  late final TextEditingController
-      _widthController;
 
   bool _saving = false;
 
@@ -444,18 +437,6 @@ class _FabricFormDialogState
       text: fabric?.description ?? '',
     );
 
-    _gsmController = TextEditingController(
-      text: fabric?.gsm?.toString() ?? '',
-    );
-
-    _compositionController =
-        TextEditingController(
-      text: fabric?.composition ?? '',
-    );
-
-    _widthController = TextEditingController(
-      text: fabric?.widthInches?.toString() ?? '',
-    );
   }
 
   @override
@@ -463,9 +444,6 @@ class _FabricFormDialogState
     _codeController.dispose();
     _nameController.dispose();
     _descriptionController.dispose();
-    _gsmController.dispose();
-    _compositionController.dispose();
-    _widthController.dispose();
     super.dispose();
   }
 
@@ -492,14 +470,6 @@ class _FabricFormDialogState
     });
 
     try {
-      final gsm = double.tryParse(
-        _gsmController.text.trim(),
-      );
-
-      final width = double.tryParse(
-        _widthController.text.trim(),
-      );
-
       if (_editing) {
         await _apiService.updateFabric(
           id: widget.fabric!.id,
@@ -507,10 +477,6 @@ class _FabricFormDialogState
           name: name,
           description:
               _descriptionController.text.trim(),
-          gsm: gsm,
-          composition:
-              _compositionController.text.trim(),
-          widthInches: width,
           isActive: true,
         );
       } else {
@@ -519,10 +485,6 @@ class _FabricFormDialogState
           name: name,
           description:
               _descriptionController.text.trim(),
-          gsm: gsm,
-          composition:
-              _compositionController.text.trim(),
-          widthInches: width,
         );
       }
 
@@ -580,43 +542,6 @@ class _FabricFormDialogState
                 hint: 'Optional',
               ),
               const SizedBox(height: 14),
-              Row(
-                children: [
-                  Expanded(
-                    child: _FormField(
-                      controller: _gsmController,
-                      label: 'GSM',
-                      hint: '180',
-                      keyboardType:
-                          const TextInputType
-                              .numberWithOptions(
-                        decimal: true,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: _FormField(
-                      controller:
-                          _widthController,
-                      label: 'Width (inches)',
-                      hint: '72',
-                      keyboardType:
-                          const TextInputType
-                              .numberWithOptions(
-                        decimal: true,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 14),
-              _FormField(
-                controller:
-                    _compositionController,
-                label: 'Composition',
-                hint: 'e.g. 100% Cotton',
-              ),
             ],
           ),
         ),
@@ -718,15 +643,6 @@ class _FabricTable extends StatelessWidget {
                               fontSize: 10,
                             ),
                           ),
-                          const SizedBox(height: 4),
-                          Text(
-                            '${fabric.gsm ?? '—'} GSM • ${fabric.composition.isEmpty ? '—' : fabric.composition}',
-                            style:
-                                const TextStyle(
-                              color: _muted,
-                              fontSize: 10,
-                            ),
-                          ),
                         ],
                       ),
                     ),
@@ -793,28 +709,6 @@ class _FabricTable extends StatelessWidget {
                           _TableHeaderStyle.style,
                     ),
                   ),
-                  Expanded(
-                    child: Text(
-                      'GSM',
-                      style:
-                          _TableHeaderStyle.style,
-                    ),
-                  ),
-                  Expanded(
-                    flex: 2,
-                    child: Text(
-                      'Composition',
-                      style:
-                          _TableHeaderStyle.style,
-                    ),
-                  ),
-                  Expanded(
-                    child: Text(
-                      'Width',
-                      style:
-                          _TableHeaderStyle.style,
-                    ),
-                  ),
                   SizedBox(width: 80),
                 ],
               ),
@@ -854,47 +748,6 @@ class _FabricTable extends StatelessWidget {
                     Expanded(
                       child: Text(
                         fabric.fabricCode,
-                        style:
-                            const TextStyle(
-                          color: _muted,
-                          fontSize: 11,
-                        ),
-                      ),
-                    ),
-                    Expanded(
-                      child: Text(
-                        fabric.gsm == null
-                            ? '—'
-                            : '${fabric.gsm}',
-                        style:
-                            const TextStyle(
-                          color: _muted,
-                          fontSize: 11,
-                        ),
-                      ),
-                    ),
-                    Expanded(
-                      flex: 2,
-                      child: Text(
-                        fabric.composition
-                                .isEmpty
-                            ? '—'
-                            : fabric.composition,
-                        overflow:
-                            TextOverflow.ellipsis,
-                        style:
-                            const TextStyle(
-                          color: _muted,
-                          fontSize: 11,
-                        ),
-                      ),
-                    ),
-                    Expanded(
-                      child: Text(
-                        fabric.widthInches ==
-                                null
-                            ? '—'
-                            : '${fabric.widthInches}"',
                         style:
                             const TextStyle(
                           color: _muted,

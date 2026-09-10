@@ -3,7 +3,7 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 
 class ApiService {
-  static const String baseUrl = 'http://192.168.29.6:4000/api';
+  static const String baseUrl = 'http://192.168.1.20:4000/api';
 
   // ============================================================
   // PARTIES
@@ -1467,13 +1467,19 @@ class JobYarnRequirement {
   final String yarnName;
   final String yarnCount;
   final double? quantity;
+  final double? issuedQuantity;
 
   const JobYarnRequirement({
     required this.yarnId,
     this.yarnName = '',
     this.yarnCount = '',
     this.quantity,
+    this.issuedQuantity,
   });
+
+  double get balanceQuantity {
+    return (quantity ?? 0) - (issuedQuantity ?? 0);
+  }
 }
 
 // ============================================================
@@ -1651,6 +1657,17 @@ class JobDetails {
                   : map['required_kg'] != null
                       ? _toDouble(map['required_kg'])
                       : null,
+          issuedQuantity: map['issuedQuantity'] != null
+              ? _toDouble(map['issuedQuantity'])
+              : map['issued_quantity'] != null
+                  ? _toDouble(map['issued_quantity'])
+                  : map['issuedKg'] != null
+                      ? _toDouble(map['issuedKg'])
+                      : map['issued_kg'] != null
+                          ? _toDouble(map['issued_kg'])
+                          : map['issued'] != null
+                              ? _toDouble(map['issued'])
+                              : null,
         );
       }).where((yarn) => yarn.yarnId.isNotEmpty).toList(),
     );
