@@ -175,7 +175,7 @@ async function getJobById(client, id) {
         JOIN master.yarn_lots yl_issue
           ON yl_issue.id = l.yarn_lot_id
         WHERE l.reference_type = 'YARN_ISSUE'
-          AND l.reference_id = md5('job:' || $1::text)::uuid
+          AND l.reference_id::text = md5('job:' || $1::text)
           AND yl_issue.yarn_id = ym.id
       ), COALESCE(joy.issued_kg, 0)) AS issued_kg,
       joy.returned_kg,
@@ -727,7 +727,7 @@ router.get('/:jobNo/yarn-history', async (req, res) => {
       JOIN job_orders jo
         ON jo.job_no = $1
        AND l.reference_type = 'YARN_ISSUE'
-       AND l.reference_id = md5('job:' || jo.id::text)::uuid
+       AND l.reference_id::text = md5('job:' || jo.id::text)
       JOIN master.yarn_lots yl
         ON yl.id = l.yarn_lot_id
       JOIN master.yarns y

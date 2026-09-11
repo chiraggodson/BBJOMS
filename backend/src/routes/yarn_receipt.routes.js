@@ -563,7 +563,7 @@ router.get('/movements', async (req, res) => {
         ON loc.id = l.location_id
       LEFT JOIN job_orders j
         ON l.reference_type = 'YARN_ISSUE'
-       AND l.reference_id = md5('job:' || j.id::text)::uuid
+       AND l.reference_id::text = md5('job:' || j.id::text)
       ORDER BY l.created_at DESC NULLS LAST, l.movement_date DESC, l.id DESC
       LIMIT $1
     `, [limit]);

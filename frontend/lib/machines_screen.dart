@@ -228,8 +228,31 @@ class _MachinesPageState extends State<MachinesPage> {
 
       if (!mounted) return;
 
+      // Keep machine numbers in natural numeric order:
+      // 1, 2, 3, ... 9, 10, 11, ...
+      // This also protects the UI if the API/database ever returns
+      // the records in a different order.
+      final sortedMachines = [...machines];
+      sortedMachines.sort((a, b) {
+        final aNo = int.tryParse(a.machineNo.trim());
+        final bNo = int.tryParse(b.machineNo.trim());
+
+        if (aNo != null && bNo != null) {
+          final result = aNo.compareTo(bNo);
+          if (result != 0) return result;
+        } else if (aNo != null) {
+          return -1;
+        } else if (bNo != null) {
+          return 1;
+        }
+
+        return a.machineNo.trim().toLowerCase().compareTo(
+              b.machineNo.trim().toLowerCase(),
+            );
+      });
+
       setState(() {
-        _machines = machines;
+        _machines = sortedMachines;
         _loading = false;
       });
     } catch (e) {
