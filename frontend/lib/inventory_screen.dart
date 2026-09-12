@@ -554,7 +554,7 @@ class _ReceiveYarnDialogState extends State<_ReceiveYarnDialog> {
 
       List<YarnReceiptLocation> locations = [];
       if (selectedCompany != null) {
-        locations = await _api.getLocations();
+        locations = await _api.getLocations(companyId: selectedCompany.id);
       }
 
       if (!mounted) return;
@@ -860,7 +860,7 @@ class _ReceiveYarnDialogState extends State<_ReceiveYarnDialog> {
                                               if (v == null) return;
 
                                               try {
-                                                final locations = await _api.getLocations();
+                                                final locations = await _api.getLocations(companyId: v.id);
                                                 if (!mounted) return;
                                                 setState(() => _locations = locations);
                                               } catch (e) {
