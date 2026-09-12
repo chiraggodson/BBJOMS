@@ -1536,6 +1536,124 @@ router.put('/:id', async (req, res) => {
  *
  * Add production against a job.
  */
+router.delete('/:id', async (req, res) => {
+  const id = Number(req.params.id);
+
+  if (!Number.isInteger(id) || id <= 0) {
+    return res.status(400).json({
+      success: false,
+      error: 'Invalid job ID',
+    });
+  }
+
+  const client = await pool.connect();
+
+  try {
+    await client.query('BEGIN');
+
+    const jobResult = await client.query(
+      `
+      SELECT id, job_no
+      FROM job_orders
+      WHERE id = $1
+      FOR UPDATE
+      `,
+      [id],
+    );
+
+    if (jobResult.rows.length === 0) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({
+        success: false,
+        error: 'Job order not found',
+      });
+    }
+
+    const jobNo = jobResult.rows[0].job_no || `#${id}`;
+
+    /*
+     * Never delete a job after yarn has been issued.
+     * Inventory history must remain traceable.
+     */
+    const yarnIssue = await client.query(
+      `
+      SELECT COUNT(*)::int AS count
+      FROM inventory.yarn_ledger
+      WHERE reference_type = 'YARN_ISSUE'
+        AND reference_id::text = md5('job:' || $1::text)
+      `,
+      [id],
+    );
+
+    if (Number(yarnIssue.rows[0]?.count || 0) > 0) {
+      await client.query('ROLLBACK');
+
+      return res.status(409).json({
+        success: false,
+        error:
+          `${jobNo} cannot be deleted because yarn has already ` +
+          `been issued against this job.`,
+      });
+    }
+
+    /*
+     * Delete direct child records first so the operation works
+     * even when those foreign keys are not configured CASCADE.
+     */
+    await client.query(
+      `DELETE FROM job_order_machines WHERE job_order_id = $1`,
+      [id],
+    );
+
+    await client.query(
+      `DELETE FROM job_order_yarns WHERE job_order_id = $1`,
+      [id],
+    );
+
+    await client.query(
+      `DELETE FROM job_production WHERE job_order_id = $1`,
+      [id],
+    );
+
+    const deleted = await client.query(
+      `
+      DELETE FROM job_orders
+      WHERE id = $1
+      RETURNING id, job_no
+      `,
+      [id],
+    );
+
+    if (deleted.rows.length === 0) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({
+        success: false,
+        error: 'Job order not found',
+      });
+    }
+
+    await client.query('COMMIT');
+
+    return res.json({
+      success: true,
+      message: `${jobNo} deleted successfully`,
+      id,
+      job_no: jobNo,
+    });
+  } catch (error) {
+    await client.query('ROLLBACK');
+
+    console.error('Delete job failed:', error);
+
+    return res.status(500).json({
+      success: false,
+      error: error.message || 'Failed to delete job order',
+    });
+  } finally {
+    client.release();
+  }
+});
+
 router.post(
   '/:id/production',
   async (req, res) => {

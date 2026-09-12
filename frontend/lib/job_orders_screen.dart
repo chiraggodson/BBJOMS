@@ -276,6 +276,62 @@ class _JobOrdersPageState extends State<JobOrdersPage> {
     ).length;
   }
 
+  Future<void> _deleteJob(JobOrder job) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Delete Job Order?'),
+        content: Text(
+          'Delete ${job.jobNo}?\n\n'
+          'This permanently removes the job order and its '
+          'machine, yarn requirement and production records.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(
+              backgroundColor: const Color(0xFFB3261E),
+              foregroundColor: Colors.white,
+            ),
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true || !mounted) return;
+
+    try {
+      await _apiService.deleteJob(job.id);
+
+      if (!mounted) return;
+
+      setState(() {
+        _jobs.removeWhere((item) => item.id == job.id);
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('${job.jobNo} deleted successfully.'),
+          backgroundColor: _accent,
+        ),
+      );
+    } catch (error) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Could not delete ${job.jobNo}: $error'),
+          backgroundColor: const Color(0xFF7A2525),
+        ),
+      );
+    }
+  }
+
   Future<void> _openJob(JobOrder job) async {
     try {
       final details =
@@ -571,6 +627,7 @@ Future<void> _openNewJob() async {
                   _JobTable(
                     jobs: jobs,
                     onOpen: _openJob,
+                    onDelete: _deleteJob,
                   ),
               ],
             ),
@@ -584,10 +641,12 @@ Future<void> _openNewJob() async {
 class _JobTable extends StatelessWidget {
   final List<JobOrder> jobs;
   final Future<void> Function(JobOrder) onOpen;
+  final Future<void> Function(JobOrder) onDelete;
 
   const _JobTable({
     required this.jobs,
     required this.onOpen,
+    required this.onDelete,
   });
 
   @override
@@ -698,9 +757,22 @@ class _JobTable extends StatelessWidget {
                         ],
                       ),
 
-                      const Icon(
-                        Icons.chevron_right,
-                        color: _muted,
+                      IconButton(
+                        onPressed: () => onDelete(job),
+                        tooltip: 'Delete Job',
+                        icon: const Icon(
+                          Icons.delete_outline,
+                          color: Color(0xFFE57373),
+                          size: 19,
+                        ),
+                      ),
+                      IconButton(
+                        onPressed: () => onOpen(job),
+                        tooltip: 'Open Job',
+                        icon: const Icon(
+                          Icons.chevron_right,
+                          color: _muted,
+                        ),
                       ),
                     ],
                   ),
@@ -910,6 +982,16 @@ class _JobTable extends StatelessWidget {
                             _Status(job.status),
                       ),
 
+                      IconButton(
+                        onPressed:
+                            () => onDelete(job),
+                        tooltip: 'Delete Job',
+                        icon: const Icon(
+                          Icons.delete_outline,
+                          color: Color(0xFFE57373),
+                          size: 19,
+                        ),
+                      ),
                       IconButton(
                         onPressed:
                             () => onOpen(job),
@@ -1801,6 +1883,11 @@ class _NewJobOrderDialogState
   void dispose() {
     _gsmController.dispose();
     _quantityController.dispose();
+
+    for (final item in _selectedYarns) {
+      item.dispose();
+    }
+
     super.dispose();
   }
 
@@ -1871,9 +1958,9 @@ class _NewJobOrderDialogState
     });
 
     try {
-      final fabricId = int.tryParse(_selectedFabric!.id);
+      final fabricId = _selectedFabric!.id.trim();
 
-      if (fabricId == null) {
+      if (fabricId.isEmpty) {
         if (mounted) {
           setState(() {
             _saving = false;
@@ -1883,25 +1970,39 @@ class _NewJobOrderDialogState
         return;
       }
 
+      final fabricName = _selectedFabric!.name.trim();
+
+      if (fabricName.isEmpty) {
+        if (mounted) {
+          setState(() {
+            _saving = false;
+          });
+        }
+        _showError('Selected fabric has no valid name.');
+        return;
+      }
+
       final jobYarns = _selectedYarns
-    .where(
-      (item) =>
-          item.yarn != null &&
-          item.quantity != null &&
-          item.quantity! > 0,
-    )
-    .map(
-      (item) => JobYarnRequirement(
-        yarnId: item.yarn!.id,
-        quantity: item.quantity,
-      ),
-    )
-    .toList();
+          .where(
+            (item) =>
+                item.yarn != null &&
+                item.quantity != null &&
+                item.quantity! > 0,
+          )
+          .map(
+            (item) => JobYarnRequirement(
+              yarnId: item.yarn!.id,
+              yarnName: item.yarn!.yarnName.trim(),
+              yarnCount: item.yarn!.yarnCount.trim(),
+              quantity: item.quantity,
+            ),
+          )
+          .toList();
 
       final jobNumbers =
           await widget.apiService.createJob(
         partyId: _selectedParty!.id,
-        fabricId: fabricId,
+        fabricName: fabricName,
         gsm: gsm,
         orderQuantity: quantity,
         machineIds: _selectedMachineIds.toList(),
@@ -2393,12 +2494,6 @@ class _NewJobOrderDialogState
   Widget _buildYarnRow(
   _SelectedJobYarn item,
 ) {
-  final quantityController = TextEditingController(
-    text: item.percentage == null
-        ? ''
-        : _formatNumber(item.percentage!),
-  );
-
   final selectedYarnIds = _selectedYarns
       .where(
         (selected) =>
@@ -2465,7 +2560,7 @@ class _NewJobOrderDialogState
         SizedBox(
           width: 100,
           child: TextField(
-            controller: quantityController,
+            controller: item.percentageController,
             keyboardType:
                 const TextInputType.numberWithOptions(
               decimal: true,
@@ -2522,6 +2617,7 @@ class _NewJobOrderDialogState
           onPressed: () {
             setState(() {
               _selectedYarns.remove(item);
+              item.dispose();
             });
           },
           icon: const Icon(
@@ -2644,16 +2740,27 @@ class _NewJobOrderDialogState
 }
 
 class _SelectedJobYarn {
-   YarnMaster? yarn;
+  YarnMaster? yarn;
 
   double? percentage;
   double? quantity;
 
+  final TextEditingController percentageController =
+      TextEditingController();
+
   _SelectedJobYarn({
     required this.yarn,
-        this.percentage,
-        this.quantity,
-  });
+    this.percentage,
+    this.quantity,
+  }) {
+    if (percentage != null) {
+      percentageController.text = _formatNumber(percentage!);
+    }
+  }
+
+  void dispose() {
+    percentageController.dispose();
+  }
 }
 
 class _TableHeaderStyle {

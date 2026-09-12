@@ -3,7 +3,7 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 
 class ApiService {
-  static const String baseUrl = 'http://192.168.29.6:4000/api';
+  static const String baseUrl = 'http://192.168.1.20:4000/api';
 
   // ============================================================
   // PARTIES
@@ -552,6 +552,32 @@ class ApiService {
   }
 
   // ============================================================
+  // DELETE JOB
+  // ============================================================
+
+  Future<void> deleteJob(int id) async {
+    final response = await http.delete(
+      Uri.parse('$baseUrl/jobs/$id'),
+    );
+
+    final decoded = _tryDecode(response.body);
+
+    if (response.statusCode != 200 || decoded is! Map) {
+      throw ApiException(
+        _extractError(decoded, 'Failed to delete job order'),
+        response.statusCode,
+      );
+    }
+
+    if (decoded['success'] != true) {
+      throw ApiException(
+        _extractError(decoded, 'Failed to delete job order'),
+        response.statusCode,
+      );
+    }
+  }
+
+  // ============================================================
   // GET ONE JOB
   // ============================================================
 
@@ -641,7 +667,7 @@ class ApiService {
 
   Future<List<String>> createJob({
     required int partyId,
-    required int fabricId,
+    required String fabricName,
     required double gsm,
     required double orderQuantity,
     required List<int> machineIds,
@@ -658,7 +684,7 @@ class ApiService {
 
     final body = <String, dynamic>{
       'party_id': partyId,
-      'fabric_id': fabricId,
+      'fabric_name': fabricName,
       'gsm': gsm,
       'order_quantity': orderQuantity,
       'machine_ids': machineIds,
@@ -666,6 +692,10 @@ class ApiService {
           .map(
             (yarn) => {
               'yarn_id': yarn.yarnId,
+              'yarn_name': yarn.yarnName,
+              'yarn_count': yarn.yarnCount,
+              'required_kg': yarn.quantity,
+              // Compatibility with older route revisions.
               'quantity': yarn.quantity,
             },
           )
@@ -695,31 +725,53 @@ class ApiService {
       );
     }
 
-    if (data['success'] != true) {
+    // Accept both the current legacy response:
+    //   { message: ..., jobs: ['BBJO001', 'BBJO002', ...] }
+    // and the newer response shapes used by later backend revisions.
+    if (data.containsKey('success') && data['success'] != true) {
       throw ApiException(
         _extractError(data, 'Failed to create job order'),
         response.statusCode,
       );
     }
 
-    final jobs = data['jobs'];
+    final jobs = data['jobs'] ?? data['job_numbers'];
 
-    if (jobs is! List) {
-      throw ApiException(
-        data['error']?.toString() ??
-            'Job was created but no job numbers were returned',
-        response.statusCode,
-      );
+    if (jobs is List) {
+      final numbers = jobs
+          .map((job) {
+            if (job is Map) {
+              return (job['job_no'] ??
+                      job['jobNo'] ??
+                      job['number'] ??
+                      '')
+                  .toString()
+                  .trim();
+            }
+            return job.toString().trim();
+          })
+          .where((number) => number.isNotEmpty)
+          .toList();
+
+      if (numbers.isNotEmpty) {
+        return numbers;
+      }
     }
 
-    return jobs
-        .map((job) {
-          if (job is Map && job['job_no'] != null) {
-            return job['job_no'].toString();
-          }
-          return job.toString();
-        })
-        .toList();
+    final job = data['job'];
+    if (job is Map) {
+      final number =
+          (job['job_no'] ?? job['jobNo'] ?? '').toString().trim();
+
+      if (number.isNotEmpty) {
+        return [number];
+      }
+    }
+
+    throw ApiException(
+      'Job creation succeeded but the server did not return a job number.',
+      response.statusCode,
+    );
   }
 
   // ============================================================
