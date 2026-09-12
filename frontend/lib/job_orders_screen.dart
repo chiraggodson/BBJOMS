@@ -361,6 +361,36 @@ class _JobOrdersPageState extends State<JobOrdersPage> {
     }
   }
 
+Future<void> _editJob(JobOrder job) async {
+  try {
+    final details = await _apiService.getJobDetails(job.id);
+
+    if (!mounted) return;
+
+    final updated = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => _EditJobOrderDialog(
+        apiService: _apiService,
+        details: details,
+      ),
+    );
+
+    if (updated == true && mounted) {
+      await _loadJobs();
+    }
+  } catch (error) {
+    if (!mounted) return;
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Could not edit ${job.jobNo}: $error'),
+        backgroundColor: const Color(0xFF7A2525),
+      ),
+    );
+  }
+}
+
 Future<void> _openNewJob() async {
   final created = await showDialog<bool>(
     context: context,
@@ -627,6 +657,7 @@ Future<void> _openNewJob() async {
                   _JobTable(
                     jobs: jobs,
                     onOpen: _openJob,
+                    onEdit: _editJob,
                     onDelete: _deleteJob,
                   ),
               ],
@@ -641,11 +672,13 @@ Future<void> _openNewJob() async {
 class _JobTable extends StatelessWidget {
   final List<JobOrder> jobs;
   final Future<void> Function(JobOrder) onOpen;
+  final Future<void> Function(JobOrder) onEdit;
   final Future<void> Function(JobOrder) onDelete;
 
   const _JobTable({
     required this.jobs,
     required this.onOpen,
+    required this.onEdit,
     required this.onDelete,
   });
 
@@ -757,6 +790,15 @@ class _JobTable extends StatelessWidget {
                         ],
                       ),
 
+                      IconButton(
+                        onPressed: () => onEdit(job),
+                        tooltip: 'Edit Job',
+                        icon: const Icon(
+                          Icons.edit_outlined,
+                          color: _accent,
+                          size: 19,
+                        ),
+                      ),
                       IconButton(
                         onPressed: () => onDelete(job),
                         tooltip: 'Delete Job',
@@ -982,6 +1024,16 @@ class _JobTable extends StatelessWidget {
                             _Status(job.status),
                       ),
 
+                      IconButton(
+                        onPressed:
+                            () => onEdit(job),
+                        tooltip: 'Edit Job',
+                        icon: const Icon(
+                          Icons.edit_outlined,
+                          color: _accent,
+                          size: 19,
+                        ),
+                      ),
                       IconButton(
                         onPressed:
                             () => onDelete(job),
@@ -1841,6 +1893,7 @@ class _ErrorState
   }
 }
 
+
 class _NewJobOrderDialog extends StatefulWidget {
   final ApiService apiService;
 
@@ -1849,12 +1902,10 @@ class _NewJobOrderDialog extends StatefulWidget {
   });
 
   @override
-  State<_NewJobOrderDialog> createState() =>
-      _NewJobOrderDialogState();
+  State<_NewJobOrderDialog> createState() => _NewJobOrderDialogState();
 }
 
-class _NewJobOrderDialogState
-    extends State<_NewJobOrderDialog> {
+class _NewJobOrderDialogState extends State<_NewJobOrderDialog> {
   List<Party> _parties = [];
   List<Fabric> _fabrics = [];
   List<Machine> _machines = [];
@@ -1862,6 +1913,820 @@ class _NewJobOrderDialogState
 
   Party? _selectedParty;
   Fabric? _selectedFabric;
+
+  final _gsmController = TextEditingController();
+  final _quantityController = TextEditingController();
+
+  final Set<int> _selectedMachineIds = {};
+  final List<_SelectedJobYarn> _selectedYarns = [];
+
+  bool _loading = true;
+  bool _saving = false;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadMasters();
+  }
+
+  @override
+  void dispose() {
+    _gsmController.dispose();
+    _quantityController.dispose();
+    for (final item in _selectedYarns) {
+      item.dispose();
+    }
+    super.dispose();
+  }
+
+  Future<void> _loadMasters() async {
+    try {
+      final results = await Future.wait([
+        widget.apiService.getParties(active: true),
+        widget.apiService.getFabrics(),
+        widget.apiService.getMachines(),
+        widget.apiService.getYarns(),
+      ]);
+
+      if (!mounted) return;
+
+      setState(() {
+        _parties = results[0] as List<Party>;
+        _fabrics = results[1] as List<Fabric>;
+        _machines = results[2] as List<Machine>;
+        _yarns = results[3] as List<YarnMaster>;
+        _loading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _loading = false;
+        _error = e.toString();
+      });
+    }
+  }
+
+  Future<void> _createJob() async {
+    if (_selectedParty == null) {
+      _showError('Please select a party.');
+      return;
+    }
+
+    if (_selectedFabric == null) {
+      _showError('Please select a fabric.');
+      return;
+    }
+
+    final gsm = double.tryParse(_gsmController.text.trim());
+    if (gsm == null || gsm <= 0) {
+      _showError('Enter a valid GSM.');
+      return;
+    }
+
+    final quantity = double.tryParse(_quantityController.text.trim());
+    if (quantity == null || quantity <= 0) {
+      _showError('Enter a valid order quantity.');
+      return;
+    }
+
+    if (_selectedMachineIds.isEmpty) {
+      _showError('Select at least one machine.');
+      return;
+    }
+
+    final validYarns = _selectedYarns.where(
+      (item) =>
+          item.yarn != null &&
+          item.quantity != null &&
+          item.quantity! > 0,
+    ).toList();
+
+    if (_selectedYarns.isNotEmpty &&
+        validYarns.length != _selectedYarns.length) {
+      _showError('Complete or remove all yarn requirement rows.');
+      return;
+    }
+
+    if (_selectedYarns.isNotEmpty) {
+      final totalPercentage = _selectedYarns.fold<double>(
+        0,
+        (sum, item) => sum + (item.percentage ?? 0),
+      );
+
+      if ((totalPercentage - 100).abs() > 0.01) {
+        _showError(
+          'Yarn percentage must total 100%. '
+          'Current total: ${_formatNumber(totalPercentage)}%.',
+        );
+        return;
+      }
+    }
+
+    setState(() {
+      _saving = true;
+    });
+
+    try {
+      final fabricName = _selectedFabric!.name.trim();
+
+      if (fabricName.isEmpty) {
+        if (mounted) {
+          setState(() {
+            _saving = false;
+          });
+        }
+        _showError('Selected fabric has no valid name.');
+        return;
+      }
+
+      final jobYarns = validYarns.map(
+        (item) {
+          return JobYarnRequirement(
+            yarnId: item.yarn!.id,
+            yarnName: item.yarn!.yarnName.trim(),
+            yarnCount: item.yarn!.yarnCount.trim(),
+            quantity: item.quantity,
+          );
+        },
+      ).toList();
+
+      final jobNumbers = await widget.apiService.createJob(
+        partyId: _selectedParty!.id,
+        fabricName: fabricName,
+        gsm: gsm,
+        orderQuantity: quantity,
+        machineIds: _selectedMachineIds.toList(),
+        yarns: jobYarns,
+      );
+
+      if (!mounted) return;
+
+      Navigator.pop(context, true);
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            jobNumbers.length == 1
+                ? 'Job ${jobNumbers.first} created successfully.'
+                : '${jobNumbers.length} job orders created successfully.',
+          ),
+          backgroundColor: _accent,
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _saving = false;
+      });
+      _showError(e.toString());
+    }
+  }
+
+  void _showError(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: const Color(0xFF7A2525),
+      ),
+    );
+  }
+
+  void _addYarn() {
+    final available = _yarns.where(
+      (yarn) => !_selectedYarns.any(
+        (selected) => selected.yarn?.id == yarn.id,
+      ),
+    ).toList();
+
+    if (available.isEmpty) {
+      _showError(
+        _yarns.isEmpty
+            ? 'No active yarns are available.'
+            : 'All available yarns are already added.',
+      );
+      return;
+    }
+
+    setState(() {
+      _selectedYarns.add(
+        _SelectedJobYarn(
+          yarn: null,
+        ),
+      );
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Dialog(
+      backgroundColor: _panel,
+      insetPadding: const EdgeInsets.all(20),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(
+          maxWidth: 900,
+          maxHeight: 820,
+        ),
+        child: Column(
+          children: [
+            _buildHeader(),
+            const Divider(height: 1, color: _border),
+            Expanded(
+              child: _loading
+                  ? const Center(
+                      child: CircularProgressIndicator(
+                        color: _accent,
+                      ),
+                    )
+                  : _error != null
+                      ? _buildError()
+                      : _buildForm(),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildHeader() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(24, 20, 16, 18),
+      child: Row(
+        children: [
+          const Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'New Job Order',
+                  style: TextStyle(
+                    fontSize: 21,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                SizedBox(height: 4),
+                Text(
+                  'Create a new knitting job order',
+                  style: TextStyle(
+                    color: _muted,
+                    fontSize: 11,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          IconButton(
+            onPressed:
+                _saving ? null : () => Navigator.pop(context),
+            icon: const Icon(Icons.close),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildError() {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(30),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(
+              Icons.cloud_off_outlined,
+              size: 45,
+              color: Color(0xFFB66A6A),
+            ),
+            const SizedBox(height: 14),
+            const Text(
+              'Could not load job master data',
+              style: TextStyle(
+                color: Color(0xFFE0A0A0),
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              _error!,
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                color: _muted,
+                fontSize: 11,
+              ),
+            ),
+            const SizedBox(height: 18),
+            OutlinedButton.icon(
+              onPressed: () {
+                setState(() {
+                  _loading = true;
+                  _error = null;
+                });
+                _loadMasters();
+              },
+              icon: const Icon(Icons.refresh),
+              label: const Text('Retry'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildForm() {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _sectionTitle('Job Information'),
+          const SizedBox(height: 14),
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final width = constraints.maxWidth >= 650
+                  ? (constraints.maxWidth - 14) / 2
+                  : constraints.maxWidth;
+
+              return Wrap(
+                spacing: 14,
+                runSpacing: 14,
+                children: [
+                  SizedBox(
+                    width: width,
+                    child: _dropdown<Party>(
+                      label: 'Party *',
+                      value: _selectedParty,
+                      items: _parties,
+                      itemLabel: (party) =>
+                          '${party.name} (${party.partyCode})',
+                      onChanged: (value) {
+                        setState(() {
+                          _selectedParty = value;
+                        });
+                      },
+                    ),
+                  ),
+                  SizedBox(
+                    width: width,
+                    child: _dropdown<Fabric>(
+                      label: 'Fabric *',
+                      value: _selectedFabric,
+                      items: _fabrics,
+                      itemLabel: (fabric) => fabric.name,
+                      onChanged: (value) {
+                        setState(() {
+                          _selectedFabric = value;
+                        });
+                      },
+                    ),
+                  ),
+                  SizedBox(
+                    width: width,
+                    child: _textField(
+                      controller: _gsmController,
+                      label: 'GSM *',
+                      hint: 'Example: 180',
+                      keyboardType:
+                          const TextInputType.numberWithOptions(
+                        decimal: true,
+                      ),
+                    ),
+                  ),
+                  SizedBox(
+                    width: width,
+                    child: _textField(
+                      controller: _quantityController,
+                      label: 'Order Quantity (kg) *',
+                      hint: 'Example: 1000',
+                      keyboardType:
+                          const TextInputType.numberWithOptions(
+                        decimal: true,
+                      ),
+                    ),
+                  ),
+                ],
+              );
+            },
+          ),
+          const SizedBox(height: 28),
+          _sectionTitle('Machines'),
+          const SizedBox(height: 6),
+          const Text(
+            'Select one or more machines. The backend will create the required job orders.',
+            style: TextStyle(
+              color: _muted,
+              fontSize: 11,
+            ),
+          ),
+          const SizedBox(height: 14),
+          if (_machines.isEmpty)
+            const Text(
+              'No machines available.',
+              style: TextStyle(
+                color: _muted,
+                fontSize: 12,
+              ),
+            )
+          else
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: _machines.map((machine) {
+                final selected =
+                    _selectedMachineIds.contains(machine.id);
+
+                return FilterChip(
+                  selected: selected,
+                  label: Text(machine.machineNo),
+                  avatar: Icon(
+                    selected
+                        ? Icons.check
+                        : Icons.precision_manufacturing_outlined,
+                    size: 16,
+                  ),
+                  onSelected: (value) {
+                    setState(() {
+                      if (value) {
+                        _selectedMachineIds.add(machine.id);
+                      } else {
+                        _selectedMachineIds.remove(machine.id);
+                      }
+                    });
+                  },
+                );
+              }).toList(),
+            ),
+          const SizedBox(height: 28),
+          Row(
+            children: [
+              Expanded(
+                child: _sectionTitle('Yarn Requirements'),
+              ),
+              OutlinedButton.icon(
+                onPressed: _addYarn,
+                icon: const Icon(Icons.add, size: 17),
+                label: const Text('Add Yarn'),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          if (_selectedYarns.isEmpty)
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(18),
+              decoration: BoxDecoration(
+                color: _panel2,
+                borderRadius: BorderRadius.circular(9),
+                border: Border.all(color: _border),
+              ),
+              child: const Text(
+                'No yarn requirements added.',
+                style: TextStyle(
+                  color: _muted,
+                  fontSize: 12,
+                ),
+              ),
+            )
+          else
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                ..._selectedYarns.map(
+                  (item) => Padding(
+                    padding: const EdgeInsets.only(bottom: 10),
+                    child: _buildYarnRow(item),
+                  ),
+                ),
+                Builder(
+                  builder: (context) {
+                    final total = _selectedYarns.fold<double>(
+                      0,
+                      (sum, item) => sum + (item.percentage ?? 0),
+                    );
+                    final complete = (total - 100).abs() < 0.001;
+
+                    return Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 14,
+                        vertical: 12,
+                      ),
+                      decoration: BoxDecoration(
+                        color: _panel2,
+                        borderRadius: BorderRadius.circular(9),
+                        border: Border.all(
+                          color: complete ? BBTheme.green : _border,
+                        ),
+                      ),
+                      child: Row(
+                        children: [
+                          const Text(
+                            'Total Yarn %',
+                            style: TextStyle(
+                              color: _muted,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          const Spacer(),
+                          Text(
+                            '${_formatNumber(total)}%',
+                            style: TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w700,
+                              color: complete
+                                  ? BBTheme.green
+                                  : const Color(0xFFFBBF24),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Icon(
+                            complete
+                                ? Icons.check_circle_outline
+                                : Icons.warning_amber_outlined,
+                            size: 18,
+                            color: complete
+                                ? BBTheme.green
+                                : const Color(0xFFFBBF24),
+                          ),
+                        ],
+                      ),
+                    );
+                  },
+                ),
+              ],
+            ),
+          const SizedBox(height: 30),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: [
+              TextButton(
+                onPressed:
+                    _saving ? null : () => Navigator.pop(context),
+                child: const Text('Cancel'),
+              ),
+              const SizedBox(width: 10),
+              FilledButton.icon(
+                onPressed: _saving ? null : _createJob,
+                icon: _saving
+                    ? const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Colors.white,
+                        ),
+                      )
+                    : const Icon(Icons.check, size: 18),
+                label: Text(
+                  _saving ? 'Creating...' : 'Create Job Order',
+                ),
+                style: FilledButton.styleFrom(
+                  backgroundColor: _accent,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 20,
+                    vertical: 14,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildYarnRow(_SelectedJobYarn item) {
+    final selectedYarnIds = _selectedYarns
+        .where(
+          (selected) =>
+              selected != item && selected.yarn != null,
+        )
+        .map((selected) => selected.yarn!.id)
+        .toSet();
+
+    final orderQuantity =
+        double.tryParse(_quantityController.text.trim()) ?? 0;
+
+    final calculatedKg =
+        orderQuantity > 0 && item.percentage != null
+            ? orderQuantity * item.percentage! / 100
+            : null;
+
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: _panel2,
+        borderRadius: BorderRadius.circular(9),
+        border: Border.all(color: _border),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: DropdownButtonFormField<YarnMaster>(
+              value: item.yarn,
+              isExpanded: true,
+              decoration: const InputDecoration(
+                labelText: 'Yarn',
+                isDense: true,
+              ),
+              hint: const Text('Select yarn'),
+              items: _yarns
+                  .where(
+                    (yarn) =>
+                        !selectedYarnIds.contains(yarn.id) ||
+                        yarn.id == item.yarn?.id,
+                  )
+                  .map(
+                    (yarn) => DropdownMenuItem<YarnMaster>(
+                      value: yarn,
+                      child: Text(
+                        '${yarn.yarnName} • ${yarn.yarnCount}',
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  )
+                  .toList(),
+              onChanged: (value) {
+                setState(() {
+                  item.yarn = value;
+                });
+              },
+            ),
+          ),
+          const SizedBox(width: 12),
+          SizedBox(
+            width: 100,
+            child: TextField(
+              controller: item.percentageController,
+              keyboardType:
+                  const TextInputType.numberWithOptions(
+                decimal: true,
+              ),
+              onChanged: (value) {
+                final percentage = double.tryParse(value);
+
+                setState(() {
+                  item.percentage = percentage;
+                  item.quantity = orderQuantity > 0 &&
+                          percentage != null
+                      ? orderQuantity * percentage / 100
+                      : null;
+                });
+              },
+              decoration: const InputDecoration(
+                labelText: 'Yarn %',
+                suffixText: '%',
+                isDense: true,
+              ),
+            ),
+          ),
+          const SizedBox(width: 12),
+          SizedBox(
+            width: 120,
+            child: InputDecorator(
+              decoration: const InputDecoration(
+                labelText: 'Required kg',
+                isDense: true,
+              ),
+              child: Text(
+                calculatedKg == null
+                    ? '—'
+                    : '${_formatNumber(calculatedKg)} kg',
+                style: const TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          IconButton(
+            tooltip: 'Remove yarn',
+            onPressed: () {
+              setState(() {
+                _selectedYarns.remove(item);
+                item.dispose();
+              });
+            },
+            icon: const Icon(
+              Icons.delete_outline,
+              color: Color(0xFFE57373),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _sectionTitle(String text) {
+    return Text(
+      text,
+      style: const TextStyle(
+        fontSize: 14,
+        fontWeight: FontWeight.w700,
+      ),
+    );
+  }
+
+  Widget _textField({
+    required TextEditingController controller,
+    required String label,
+    required String hint,
+    TextInputType? keyboardType,
+  }) {
+    return TextField(
+      controller: controller,
+      keyboardType: keyboardType,
+      decoration: InputDecoration(
+        labelText: label,
+        hintText: hint,
+        filled: true,
+        fillColor: _panel2,
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(9),
+          borderSide: const BorderSide(color: BBTheme.border),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(9),
+          borderSide: const BorderSide(color: BBTheme.border),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(9),
+          borderSide: const BorderSide(color: _accent),
+        ),
+      ),
+    );
+  }
+
+  Widget _dropdown<T>({
+    required String label,
+    required T? value,
+    required List<T> items,
+    required String Function(T) itemLabel,
+    required ValueChanged<T?> onChanged,
+  }) {
+    return DropdownButtonFormField<T>(
+      value: value,
+      isExpanded: true,
+      decoration: InputDecoration(
+        labelText: label,
+        filled: true,
+        fillColor: _panel2,
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(9),
+          borderSide: const BorderSide(color: BBTheme.border),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(9),
+          borderSide: const BorderSide(color: BBTheme.border),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(9),
+          borderSide: const BorderSide(color: _accent),
+        ),
+      ),
+      items: items
+          .map(
+            (item) => DropdownMenuItem<T>(
+              value: item,
+              child: Text(
+                itemLabel(item),
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+          )
+          .toList(),
+      onChanged: onChanged,
+    );
+  }
+}
+
+class _EditJobOrderDialog extends StatefulWidget {
+  final ApiService apiService;
+  final JobDetails details;
+
+  const _EditJobOrderDialog({
+    required this.apiService,
+    required this.details,
+  });
+
+  @override
+  State<_EditJobOrderDialog> createState() =>
+      _EditJobOrderDialogState();
+}
+
+class _EditJobOrderDialogState
+    extends State<_EditJobOrderDialog> {
+  List<Party> _parties = [];
+  List<Fabric> _fabrics = [];
+  List<Machine> _machines = [];
+  List<YarnMaster> _yarns = [];
+
+  Party? _selectedParty;
+  Fabric? _selectedFabric;
+
+  int get _jobId => widget.details.job.id;
+  String get _jobNo => widget.details.job.jobNo;
 
   final _gsmController = TextEditingController();
   final _quantityController = TextEditingController();
@@ -1902,11 +2767,88 @@ class _NewJobOrderDialogState
 
       if (!mounted) return;
 
+      final parties = results[0] as List<Party>;
+      final fabrics = results[1] as List<Fabric>;
+      final machines = results[2] as List<Machine>;
+      final yarns = results[3] as List<YarnMaster>;
+
+      final job = widget.details.job;
+
+      Party? selectedParty;
+      if (job.partyId != null) {
+        for (final party in parties) {
+          if (party.id == job.partyId) {
+            selectedParty = party;
+            break;
+          }
+        }
+      }
+
+      Fabric? selectedFabric;
+      for (final fabric in fabrics) {
+        if (fabric.name.trim().toLowerCase() ==
+            job.fabricName.trim().toLowerCase()) {
+          selectedFabric = fabric;
+          break;
+        }
+      }
+
+      _gsmController.text = _formatNumber(job.gsm);
+      _quantityController.text = _formatNumber(job.orderQuantity);
+
+      final selectedMachines =
+          widget.details.machineIds.where((id) => id > 0).toSet();
+
+      final selectedYarns = <_SelectedJobYarn>[];
+
+      for (final required in widget.details.yarns) {
+        YarnMaster? master;
+
+        for (final yarn in yarns) {
+          final sameId =
+              required.yarnId.isNotEmpty &&
+              yarn.id == required.yarnId;
+          final sameNameCount =
+              yarn.yarnName.trim().toLowerCase() ==
+                  required.yarnName.trim().toLowerCase() &&
+              yarn.yarnCount.trim().toLowerCase() ==
+                  required.yarnCount.trim().toLowerCase();
+
+          if (sameId || sameNameCount) {
+            master = yarn;
+            break;
+          }
+        }
+
+        if (master == null) continue;
+
+        final requiredKg = required.quantity ?? 0;
+        final percentage = job.orderQuantity > 0
+            ? requiredKg / job.orderQuantity * 100
+            : null;
+
+        selectedYarns.add(
+          _SelectedJobYarn(
+            yarn: master,
+            percentage: percentage,
+            quantity: required.quantity,
+          ),
+        );
+      }
+
       setState(() {
-        _parties = results[0] as List<Party>;
-        _fabrics = results[1] as List<Fabric>;
-        _machines = results[2] as List<Machine>;
-        _yarns = results[3] as List<YarnMaster>;
+        _parties = parties;
+        _fabrics = fabrics;
+        _machines = machines;
+        _yarns = yarns;
+        _selectedParty = selectedParty;
+        _selectedFabric = selectedFabric;
+        _selectedMachineIds
+          ..clear()
+          ..addAll(selectedMachines);
+        _selectedYarns
+          ..clear()
+          ..addAll(selectedYarns);
         _loading = false;
       });
     } catch (e) {
@@ -1919,7 +2861,7 @@ class _NewJobOrderDialogState
     }
   }
 
-  Future<void> _createJob() async {
+  Future<void> _saveJob() async {
     if (_selectedParty == null) {
       _showError('Please select a party.');
       return;
@@ -1999,8 +2941,8 @@ class _NewJobOrderDialogState
           )
           .toList();
 
-      final jobNumbers =
-          await widget.apiService.createJob(
+      await widget.apiService.updateJob(
+        id: _jobId,
         partyId: _selectedParty!.id,
         fabricName: fabricName,
         gsm: gsm,
@@ -2015,11 +2957,7 @@ class _NewJobOrderDialogState
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(
-            jobNumbers.length == 1
-                ? 'Job ${jobNumbers.first} created successfully.'
-                : '${jobNumbers.length} job orders created successfully.',
-          ),
+          content: Text('$_jobNo updated successfully.'),
           backgroundColor: _accent,
         ),
       );
@@ -2110,13 +3048,13 @@ class _NewJobOrderDialogState
       ),
       child: Row(
         children: [
-          const Expanded(
+          Expanded(
             child: Column(
               crossAxisAlignment:
                   CrossAxisAlignment.start,
               children: [
-                Text(
-                  'New Job Order',
+                const Text(
+                  'Edit Job Order',
                   style: TextStyle(
                     fontSize: 21,
                     fontWeight: FontWeight.w700,
@@ -2124,7 +3062,7 @@ class _NewJobOrderDialogState
                 ),
                 SizedBox(height: 4),
                 Text(
-                  'Create a new knitting job order',
+                  'Edit and update knitting job order $_jobNo',
                   style: TextStyle(
                     color: _muted,
                     fontSize: 11,
@@ -2453,7 +3391,7 @@ class _NewJobOrderDialogState
               const SizedBox(width: 10),
               FilledButton.icon(
                 onPressed:
-                    _saving ? null : _createJob,
+                    _saving ? null : _saveJob,
                 icon: _saving
                     ? const SizedBox(
                         width: 16,

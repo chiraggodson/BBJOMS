@@ -781,7 +781,7 @@ class ApiService {
   Future<JobOrder> updateJob({
     required int id,
     required int partyId,
-    required int fabricId,
+    required String fabricName,
     required double gsm,
     required double orderQuantity,
     List<int> machineIds = const [],
@@ -791,15 +791,16 @@ class ApiService {
 
     final body = <String, dynamic>{
       'party_id': partyId,
-      'fabric_id': fabricId,
+      'fabric_name': fabricName,
       'gsm': gsm,
       'order_quantity': orderQuantity,
       'machine_ids': machineIds,
       'yarns': yarns
           .map(
             (yarn) => {
-              'yarn_id': yarn.yarnId,
-              'quantity': yarn.quantity,
+              'yarn_name': yarn.yarnName,
+              'yarn_count': yarn.yarnCount,
+              'required_kg': yarn.quantity,
             },
           )
           .toList(),
