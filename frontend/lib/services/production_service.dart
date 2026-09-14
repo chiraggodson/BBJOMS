@@ -4,7 +4,7 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 
 class ProductionService {
-  static const String baseUrl = 'http://192.168.1.20:4000/api';
+  static const String baseUrl = 'http://192.168.29.6:4000/api';
 
   Future<void> addProductionBatch({
     required List<Map<String, dynamic>> entries,
