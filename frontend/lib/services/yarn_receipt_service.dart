@@ -93,7 +93,7 @@ class YarnReceiptApi {
   final http.Client _client;
 
   YarnReceiptApi({
-    this.baseUrl = 'http://192.168.29.6:4000/api',
+    this.baseUrl = 'http://192.168.1.20:4000/api',
     http.Client? client,
   }) : _client = client ?? http.Client();
 
