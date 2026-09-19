@@ -205,7 +205,7 @@ router.post('/', async (req, res) => {
         address_line1, address_line2, city, state, pincode,
         country, contact_person, phone, email, is_active, notes
       )
-      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18)
       RETURNING id
     `, [
       COMPANY_ID, code, party.name, party.alias, party.gstin, party.pan,

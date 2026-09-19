@@ -1,423 +1,231 @@
+
 const express = require('express');
 const router = express.Router();
 const { pool } = require('../db');
 
+const COMPANY_ID = '63558a5c-3815-4d4f-9f0d-7edfdf5d3f11';
+
 function clean(value) {
-  if (value === undefined || value === null) return null;
-
-  const v = String(value).trim();
-
-  return v === '' ? null : v;
+  return value == null ? '' : String(value).trim();
 }
 
 function isUuid(value) {
-  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
-    String(value || '')
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(String(value || ''));
+}
+
+function number(value, fallback = 0) {
+  if (value === null || value === undefined || value === '') return fallback;
+  const n = Number(value);
+  return Number.isFinite(n) ? n : fallback;
+}
+
+async function currentFinancialYear(client, companyId) {
+  const result = await client.query(`
+    SELECT id
+    FROM core.financial_years
+    WHERE company_id=$1
+      AND is_current=true
+      AND is_closed=false
+    ORDER BY start_date DESC
+    LIMIT 1
+  `, [companyId]);
+
+  if (!result.rows.length) {
+    throw new Error('No open financial year exists for this company.');
+  }
+
+  return result.rows[0].id;
+}
+
+async function nextReceiptNo(client, companyId, financialYearId) {
+  await client.query(
+    `SELECT pg_advisory_xact_lock(hashtext($1))`,
+    [`YARN_RECEIPT:${companyId}:${financialYearId}`]
   );
+
+  const result = await client.query(`
+    SELECT COALESCE(MAX(
+      CASE
+        WHEN receipt_no ~ '^YR-[0-9]+$'
+        THEN CAST(SUBSTRING(receipt_no FROM '[0-9]+$') AS BIGINT)
+        ELSE 0
+      END
+    ),0)+1 AS next_no
+    FROM inventory.yarn_receipts
+    WHERE company_id=$1 AND financial_year_id=$2
+  `, [companyId,financialYearId]);
+
+  return `YR-${String(Number(result.rows[0].next_no)).padStart(6,'0')}`;
 }
 
-// ============================================================
-// COMPANIES
-// GET /api/yarn-receipts/companies
-//
-// Returns B&B plus all active Customers from the existing
-// Parties module. Customers are represented as core.companies
-// because inventory.yarn_receipts.company_id is a UUID FK to
-// core.companies.
-// ============================================================
+async function nextIssueNo(client, companyId, financialYearId) {
+  await client.query(
+    `SELECT pg_advisory_xact_lock(hashtext($1))`,
+    [`YARN_ISSUE:${companyId}:${financialYearId}`]
+  );
 
-async function ensureCustomerCompanies() {
-  const client = await pool.connect();
+  const result = await client.query(`
+    SELECT COALESCE(MAX(
+      CASE
+        WHEN issue_no ~ '^YI-[0-9]+$'
+        THEN CAST(SUBSTRING(issue_no FROM '[0-9]+$') AS BIGINT)
+        ELSE 0
+      END
+    ),0)+1 AS next_no
+    FROM jobwork.yarn_issues
+    WHERE company_id=$1 AND financial_year_id=$2
+  `, [companyId,financialYearId]);
 
-  try {
-    await client.query('BEGIN');
-
-    const customers = await client.query(`
-      SELECT DISTINCT
-        p.id,
-        p.party_code,
-        p.name,
-        p.gstin,
-        p.address_line1,
-        p.address_line2,
-        p.city,
-        p.state,
-        p.pin_code,
-        p.country,
-        p.phone,
-        p.email
-      FROM parties p
-      JOIN party_roles pr
-        ON pr.party_id = p.id
-      WHERE COALESCE(p.is_active, true) = true
-        AND LOWER(TRIM(pr.role)) = 'customer'
-      ORDER BY p.name ASC
-    `);
-
-    const fyTemplate = await client.query(`
-      SELECT code, name, start_date, end_date
-      FROM core.financial_years
-      WHERE is_current = true
-        AND is_closed = false
-      ORDER BY start_date DESC
-      LIMIT 1
-    `);
-
-    let fyCode;
-    let fyName;
-    let fyStart;
-    let fyEnd;
-
-    if (fyTemplate.rows.length > 0) {
-      const row = fyTemplate.rows[0];
-      fyCode = row.code;
-      fyName = row.name;
-      fyStart = row.start_date;
-      fyEnd = row.end_date;
-    } else {
-      const now = new Date();
-      const year = now.getUTCMonth() >= 3
-        ? now.getUTCFullYear()
-        : now.getUTCFullYear() - 1;
-      const nextYear = year + 1;
-
-      fyCode = `${year}-${String(nextYear).slice(-2)}`;
-      fyName = `FY ${fyCode}`;
-      fyStart = `${year}-04-01`;
-      fyEnd = `${nextYear}-03-31`;
-    }
-
-    for (const customer of customers.rows) {
-      const companyCode = `CUST-${customer.id}`;
-
-      const existing = await client.query(`
-        SELECT id
-        FROM core.companies
-        WHERE code = $1
-        LIMIT 1
-      `, [companyCode]);
-
-      let companyId;
-
-      if (existing.rows.length > 0) {
-        companyId = existing.rows[0].id;
-      } else {
-        const inserted = await client.query(`
-          INSERT INTO core.companies (
-            code, name, legal_name, gstin,
-            address_line1, address_line2, city, state,
-            pincode, country, phone, email, is_active
-          )
-          VALUES (
-            $1, $2, $2, $3,
-            $4, $5, $6, $7,
-            $8, $9, $10, $11, true
-          )
-          ON CONFLICT (code) DO NOTHING
-          RETURNING id
-        `, [
-          companyCode,
-          customer.name,
-          customer.gstin,
-          customer.address_line1,
-          customer.address_line2,
-          customer.city,
-          customer.state,
-          customer.pin_code,
-          customer.country || 'India',
-          customer.phone,
-          customer.email,
-        ]);
-
-        if (inserted.rows.length > 0) {
-          companyId = inserted.rows[0].id;
-        } else {
-          const retry = await client.query(`
-            SELECT id
-            FROM core.companies
-            WHERE code = $1
-            LIMIT 1
-          `, [companyCode]);
-          companyId = retry.rows[0]?.id;
-        }
-      }
-
-      if (!companyId) {
-        throw new Error(
-          `Could not create/find company for customer ${customer.name}.`
-        );
-      }
-
-      const existingFy = await client.query(`
-        SELECT id
-        FROM core.financial_years
-        WHERE company_id = $1
-          AND code = $2
-        LIMIT 1
-      `, [companyId, fyCode]);
-
-      if (existingFy.rows.length === 0) {
-        await client.query(`
-          INSERT INTO core.financial_years (
-            company_id, code, name, start_date, end_date,
-            is_current, is_closed
-          )
-          VALUES ($1, $2, $3, $4, $5, true, false)
-          ON CONFLICT (company_id, code) DO NOTHING
-        `, [companyId, fyCode, fyName, fyStart, fyEnd]);
-      }
-    }
-
-    await client.query('COMMIT');
-  } catch (error) {
-    try { await client.query('ROLLBACK'); } catch (_) {}
-    throw error;
-  } finally {
-    client.release();
-  }
+  return `YI-${String(Number(result.rows[0].next_no)).padStart(6,'0')}`;
 }
 
-router.get('/companies', async (req, res) => {
-  try {
-    await ensureCustomerCompanies();
+// ------------------------------------------------------------
+// Companies
+// ------------------------------------------------------------
 
+router.get('/companies', async (req,res) => {
+  try {
     const result = await pool.query(`
-      SELECT id, code, name
+      SELECT id,code,name
       FROM core.companies
-      WHERE COALESCE(is_active, true) = true
-      ORDER BY
-        CASE WHEN code LIKE 'CUST-%' THEN 1 ELSE 0 END,
-        name ASC
-    `);
-
-    return res.json(result.rows);
-  } catch (error) {
-    console.error('Yarn receipt companies error:', error);
-    return res.status(500).json({
-      success: false,
-      error: 'Failed to load companies',
-      details: error.message,
-    });
-  }
-});
-
-// ============================================================
-// SUPPLIERS
-//
-// The existing Parties module uses:
-//   parties
-//   party_roles
-//
-// Yarn Supplier is identified by:
-//   party_roles.role = 'Yarn Supplier'
-//
-// The receipt transaction later maps this party into
-// master.parties because inventory.yarn_receipts.party_id
-// uses the UUID master party.
-// ============================================================
-
-router.get('/suppliers', async (req, res) => {
-  try {
-    const result = await pool.query(`
-      SELECT DISTINCT
-        p.id,
-        p.party_code AS code,
-        p.party_code,
-        p.name
-      FROM parties p
-      JOIN party_roles pr
-        ON pr.party_id = p.id
-      WHERE COALESCE(p.is_active, true) = true
-        AND LOWER(pr.role) = 'yarn supplier'
-      ORDER BY p.name ASC
-    `);
-
-    return res.json(result.rows);
-  } catch (error) {
-    console.error('Yarn suppliers error:', error);
-
-    return res.status(500).json({
-      success: false,
-      error: 'Failed to load yarn suppliers',
-      details: error.message,
-    });
-  }
-});
-
-// ============================================================
-// COLORS
-// GET /api/yarn-receipts/colors
-// ============================================================
-
-router.get('/colors', async (req, res) => {
-  try {
-    const result = await pool.query(`
-      SELECT id, code, name, description
-      FROM master.colors
-      WHERE COALESCE(is_active, true) = true
+      WHERE COALESCE(is_active,true)=true
       ORDER BY name ASC
     `);
-    return res.json(result.rows);
+    res.json(result.rows);
   } catch (error) {
-    console.error('Yarn colors error:', error);
-    return res.status(500).json({
-      success: false,
-      error: 'Failed to load colors',
-      details: error.message,
-    });
+    console.error('Yarn receipt companies error:',error);
+    res.status(500).json({success:false,error:'Failed to load companies',details:error.message});
   }
 });
 
-// ============================================================
-// LOCATIONS
-//
-// Locations are physical storage points. They are shared by B&B and
-// customer-owned yarn, so they must NOT be filtered by owner company.
-// GET /api/yarn-receipts/locations
-// ============================================================
+// ------------------------------------------------------------
+// Suppliers
+// ------------------------------------------------------------
 
-router.get('/locations', async (req, res) => {
+router.get('/suppliers', async (req,res) => {
   try {
-    const result = await pool.query(
-      `
-      SELECT
-        id,
-        code,
-        name,
-        location_type
+    const result = await pool.query(`
+      SELECT DISTINCT
+        p.id,
+        p.code,
+        p.code AS party_code,
+        p.name,
+        p.phone,
+        p.email
+      FROM master.parties p
+      JOIN master.party_role_assignments pra ON pra.party_id=p.id
+      JOIN master.party_roles pr ON pr.id=pra.role_id
+      WHERE p.company_id=$1
+        AND COALESCE(p.is_active,true)=true
+        AND LOWER(pr.name)='yarn supplier'
+      ORDER BY p.name ASC
+    `,[COMPANY_ID]);
+
+    res.json(result.rows);
+  } catch (error) {
+    console.error('Yarn suppliers error:',error);
+    res.status(500).json({success:false,error:'Failed to load yarn suppliers',details:error.message});
+  }
+});
+
+// ------------------------------------------------------------
+// Colors
+// ------------------------------------------------------------
+
+router.get('/colors', async (req,res) => {
+  try {
+    const result = await pool.query(`
+      SELECT id,code,name,description
+      FROM master.colors
+      WHERE COALESCE(is_active,true)=true
+      ORDER BY name ASC
+    `);
+    res.json(result.rows);
+  } catch (error) {
+    console.error('Yarn colors error:',error);
+    res.status(500).json({success:false,error:'Failed to load colors',details:error.message});
+  }
+});
+
+// ------------------------------------------------------------
+// Locations
+// ------------------------------------------------------------
+
+router.get('/locations', async (req,res) => {
+  try {
+    const result = await pool.query(`
+      SELECT id,code,name,floor_id,location_type
       FROM master.locations
-      WHERE COALESCE(is_active, true) = true
-      ORDER BY name ASC, code ASC
-      `
-    );
+      WHERE company_id=$1
+        AND COALESCE(is_active,true)=true
+      ORDER BY name ASC,code ASC
+    `,[COMPANY_ID]);
 
-    return res.json(result.rows);
+    res.json(result.rows);
   } catch (error) {
-    console.error('Yarn locations error:', error);
-
-    return res.status(500).json({
-      success: false,
-      error: 'Failed to load locations',
-      details: error.message,
-    });
+    console.error('Yarn locations error:',error);
+    res.status(500).json({success:false,error:'Failed to load locations',details:error.message});
   }
 });
 
-// ============================================================
-// RECEIPT LIST
-//
-// GET /api/yarn-receipts
-// GET /api/yarn-receipts?company_id=UUID
-// ============================================================
+// ------------------------------------------------------------
+// Receipt list
+// ------------------------------------------------------------
 
-router.get('/', async (req, res) => {
+router.get('/', async (req,res) => {
   try {
-    const companyId = clean(req.query.company_id);
+    const companyId = clean(req.query.company_id) || COMPANY_ID;
 
-    const params = [];
-    let companyFilter = '';
-
-    if (companyId) {
-      if (!isUuid(companyId)) {
-        return res.status(400).json({
-          success: false,
-          error: 'Invalid company ID.',
-        });
-      }
-
-      params.push(companyId);
-
-      companyFilter = `
-        WHERE r.company_id = $${params.length}
-      `;
+    if (!isUuid(companyId)) {
+      return res.status(400).json({success:false,error:'Invalid company ID.'});
     }
 
-    const result = await pool.query(
-      `
+    const result = await pool.query(`
       SELECT
         r.id,
         r.company_id,
-
         c.code AS company_code,
         c.name AS company_name,
-
+        r.financial_year_id,
         r.receipt_no,
         r.receipt_date,
+        r.reference_no,
         r.challan_no,
         r.bill_no,
-
         r.party_id,
-        p.name AS supplier_name,
-
+        COALESCE(p.name,'') AS supplier_name,
         r.location_id,
-        l.name AS location_name,
-
+        COALESCE(l.name,'') AS location_name,
         r.status,
-
-        COALESCE(SUM(rl.quantity), 0) AS total_quantity,
-        COUNT(rl.id) AS line_count
-
+        r.notes,
+        COALESCE(SUM(rl.quantity),0)::float AS total_quantity,
+        COUNT(rl.id)::integer AS line_count
       FROM inventory.yarn_receipts r
-
-      LEFT JOIN core.companies c
-        ON c.id = r.company_id
-
-      LEFT JOIN master.parties p
-        ON p.id = r.party_id
-
-      LEFT JOIN master.locations l
-        ON l.id = r.location_id
-
-      LEFT JOIN inventory.yarn_receipt_lines rl
-        ON rl.receipt_id = r.id
-
-      ${companyFilter}
-
+      LEFT JOIN core.companies c ON c.id=r.company_id
+      LEFT JOIN master.parties p ON p.id=r.party_id
+      LEFT JOIN master.locations l ON l.id=r.location_id
+      LEFT JOIN inventory.yarn_receipt_lines rl ON rl.receipt_id=r.id
+      WHERE r.company_id=$1
       GROUP BY
-        r.id,
-        r.company_id,
-        c.code,
-        c.name,
-        r.receipt_no,
-        r.receipt_date,
-        r.challan_no,
-        r.bill_no,
-        r.party_id,
-        p.name,
-        r.location_id,
-        l.name,
-        r.status,
-        r.created_at
-
-      ORDER BY
-        r.receipt_date DESC,
-        r.created_at DESC
-
+        r.id,c.code,c.name,r.financial_year_id,r.receipt_no,
+        r.receipt_date,r.reference_no,r.challan_no,r.bill_no,
+        r.party_id,p.name,r.location_id,l.name,r.status,r.notes,r.created_at
+      ORDER BY r.receipt_date DESC,r.created_at DESC
       LIMIT 100
-      `,
-      params
-    );
+    `,[companyId]);
 
-    return res.json(result.rows);
+    res.json(result.rows);
   } catch (error) {
-    console.error('Yarn receipt list error:', error);
-
-    return res.status(500).json({
-      success: false,
-      error: 'Failed to load yarn receipts',
-      details: error.message,
-    });
+    console.error('Yarn receipt list error:',error);
+    res.status(500).json({success:false,error:'Failed to load yarn receipts',details:error.message});
   }
 });
 
+// ------------------------------------------------------------
+// Stock
+// ------------------------------------------------------------
 
-// ============================================================
-// YARN STOCK FOR ISSUE
-//
-// GET /api/yarn-receipts/stock
-// Returns positive-balance stock by lot + location.
-// ============================================================
-router.get('/stock', async (req, res) => {
+router.get('/stock', async (req,res) => {
   try {
     const result = await pool.query(`
       SELECT
@@ -425,96 +233,53 @@ router.get('/stock', async (req, res) => {
         yl.lot_no,
         yl.supplier_lot_no,
         yl.received_date,
-
         yl.company_id,
-        COALESCE(owner.name, '') AS owner_name,
-
         yl.yarn_id,
         y.code AS yarn_code,
         y.name AS yarn_name,
-        y.count AS yarn_count,
-        y.composition,
-
+        '' AS yarn_count,
+        '' AS composition,
         yl.color_id,
-        COALESCE(ccol.code, '') AS color_code,
-        COALESCE(ccol.name, '') AS color_name,
-
+        COALESCE(c.name,'') AS color_name,
         yl.supplier_party_id,
-        COALESCE(sp.name, '') AS supplier_name,
-
-        yl_loc.location_id,
-        COALESCE(loc.name, '') AS location_name,
-
-        COALESCE(SUM(l.quantity_in), 0)::float AS quantity_in,
-        COALESCE(SUM(l.quantity_out), 0)::float AS quantity_out,
-        COALESCE(SUM(l.quantity_in - l.quantity_out), 0)::float AS balance
+        COALESCE(sp.name,'') AS supplier_name,
+        led.location_id,
+        COALESCE(loc.name,'') AS location_name,
+        COALESCE(SUM(led.quantity_in-led.quantity_out),0)::float AS balance,
+        COALESCE(SUM(led.quantity_in),0)::float AS quantity_in,
+        COALESCE(SUM(led.quantity_out),0)::float AS quantity_out
       FROM master.yarn_lots yl
-      JOIN master.yarns y
-        ON y.id = yl.yarn_id
-      LEFT JOIN master.colors ccol
-        ON ccol.id = yl.color_id
-      LEFT JOIN master.parties sp
-        ON sp.id = yl.supplier_party_id
-      LEFT JOIN core.companies owner
-        ON owner.id = yl.company_id
-      JOIN (
-        SELECT DISTINCT yarn_lot_id, location_id
-        FROM inventory.yarn_ledger
-        WHERE location_id IS NOT NULL
-      ) yl_loc
-        ON yl_loc.yarn_lot_id = yl.id
-      LEFT JOIN master.locations loc
-        ON loc.id = yl_loc.location_id
-      LEFT JOIN inventory.yarn_ledger l
-        ON l.yarn_lot_id = yl.id
-       AND l.location_id = yl_loc.location_id
+      JOIN master.yarns y ON y.id=yl.yarn_id
+      LEFT JOIN master.colors c ON c.id=yl.color_id
+      LEFT JOIN master.parties sp ON sp.id=yl.supplier_party_id
+      JOIN inventory.yarn_ledger led ON led.yarn_lot_id=yl.id
+      LEFT JOIN master.locations loc ON loc.id=led.location_id
+      WHERE yl.company_id=$1
+        AND led.location_id IS NOT NULL
       GROUP BY
-        yl.id,
-        yl.lot_no,
-        yl.supplier_lot_no,
-        yl.received_date,
-        yl.company_id,
-        owner.name,
-        yl.yarn_id,
-        y.code,
-        y.name,
-        y.count,
-        y.composition,
-        yl.color_id,
-        ccol.code,
-        ccol.name,
-        yl.supplier_party_id,
-        sp.name,
-        yl_loc.location_id,
-        loc.name
-      HAVING COALESCE(SUM(l.quantity_in - l.quantity_out), 0) > 0
-      ORDER BY y.name ASC, ccol.name ASC, yl.lot_no ASC, loc.name ASC
-    `);
+        yl.id,yl.lot_no,yl.supplier_lot_no,yl.received_date,
+        yl.company_id,yl.yarn_id,y.code,y.name,yl.color_id,c.name,
+        yl.supplier_party_id,sp.name,led.location_id,loc.name
+      HAVING COALESCE(SUM(led.quantity_in-led.quantity_out),0)>0
+      ORDER BY y.name ASC,c.name ASC,yl.lot_no ASC,loc.name ASC
+    `,[COMPANY_ID]);
 
-    return res.json({
-      success: true,
-      stock: result.rows,
-    });
+    res.json({success:true,stock:result.rows});
   } catch (error) {
-    console.error('Yarn issue stock error:', error);
-    return res.status(500).json({
-      success: false,
-      error: 'Failed to load yarn stock for issue.',
-      details: error.message,
-    });
+    console.error('Yarn issue stock error:',error);
+    res.status(500).json({success:false,error:'Failed to load yarn stock for issue.',details:error.message});
   }
 });
 
-// ============================================================
-// RECENT YARN MOVEMENTS
-//
-// GET /api/yarn-receipts/movements?limit=50
-// ============================================================
-router.get('/movements', async (req, res) => {
+// ------------------------------------------------------------
+// Movements
+// ------------------------------------------------------------
+
+router.get('/movements', async (req,res) => {
   try {
     const requestedLimit = Number(req.query.limit);
     const limit = Number.isInteger(requestedLimit)
-      ? Math.min(Math.max(requestedLimit, 1), 200)
+      ? Math.min(Math.max(requestedLimit,1),200)
       : 50;
 
     const result = await pool.query(`
@@ -528,92 +293,62 @@ router.get('/movements', async (req, res) => {
         l.reference_type,
         l.reference_id,
         l.remarks,
-
         l.company_id,
-        COALESCE(owner.name, '') AS owner_name,
-
         l.location_id,
-        COALESCE(loc.name, '') AS location_name,
-
+        COALESCE(loc.name,'') AS location_name,
         yl.id AS yarn_lot_id,
         yl.lot_no,
         yl.supplier_lot_no,
-
         y.id AS yarn_id,
         y.code AS yarn_code,
         y.name AS yarn_name,
-        y.count AS yarn_count,
-        y.composition,
-
+        '' AS yarn_count,
+        '' AS composition,
         yl.color_id,
-        COALESCE(ccol.code, '') AS color_code,
-        COALESCE(ccol.name, '') AS color_name,
-
-        COALESCE(j.job_no, '') AS job_no
+        COALESCE(c.name,'') AS color_name,
+        COALESCE(jo.job_no,'') AS job_no
       FROM inventory.yarn_ledger l
-      JOIN master.yarn_lots yl
-        ON yl.id = l.yarn_lot_id
-      JOIN master.yarns y
-        ON y.id = yl.yarn_id
-      LEFT JOIN master.colors ccol
-        ON ccol.id = yl.color_id
-      LEFT JOIN core.companies owner
-        ON owner.id = l.company_id
-      LEFT JOIN master.locations loc
-        ON loc.id = l.location_id
-      LEFT JOIN job_orders j
-        ON l.reference_type = 'YARN_ISSUE'
-       AND l.reference_id::text = md5('job:' || j.id::text)
-      ORDER BY l.created_at DESC NULLS LAST, l.movement_date DESC, l.id DESC
-      LIMIT $1
-    `, [limit]);
+      JOIN master.yarn_lots yl ON yl.id=l.yarn_lot_id
+      JOIN master.yarns y ON y.id=yl.yarn_id
+      LEFT JOIN master.colors c ON c.id=yl.color_id
+      LEFT JOIN master.locations loc ON loc.id=l.location_id
+      LEFT JOIN jobwork.yarn_issues yi
+        ON yi.id=l.reference_id
+       AND l.reference_type='YARN_ISSUE'
+      LEFT JOIN jobwork.job_orders jo
+        ON jo.id=yi.job_order_id
+      WHERE l.company_id=$1
+      ORDER BY l.created_at DESC NULLS LAST,l.movement_date DESC,l.id DESC
+      LIMIT $2
+    `,[COMPANY_ID,limit]);
 
-    return res.json({
-      success: true,
-      movements: result.rows,
-    });
+    res.json({success:true,movements:result.rows});
   } catch (error) {
-    console.error('Yarn movements error:', error);
-    return res.status(500).json({
-      success: false,
-      error: 'Failed to load yarn movements.',
-      details: error.message,
-    });
+    console.error('Yarn movements error:',error);
+    res.status(500).json({success:false,error:'Failed to load yarn movements.',details:error.message});
   }
 });
 
-// ============================================================
-// ISSUE YARN - MULTIPLE JOBS / MULTIPLE YARNS
-//
-// POST /api/yarn-receipts/issue-batch
-//
-// Each entry:
-//   job_id
-//   yarn_lot_id
-//   location_id
-//   quantity
-//   remarks (optional)
-//
-// Every entry is written to the same inventory yarn ledger used
-// by receipts, so stock remains fully traceable.
-// ============================================================
-router.post('/issue-batch', async (req, res) => {
-  const entries = Array.isArray(req.body?.entries)
-    ? req.body.entries
-    : [];
-  const issueDate = clean(req.body?.issue_date ?? req.body?.issueDate);
+// ------------------------------------------------------------
+// Issue batch
+// ------------------------------------------------------------
 
-  if (entries.length === 0) {
+router.post('/issue-batch', async (req,res) => {
+  const entries = Array.isArray(req.body?.entries) ? req.body.entries : [];
+  const issueDate = clean(req.body?.issue_date ?? req.body?.issueDate) ||
+    new Date().toISOString().slice(0,10);
+
+  if (!entries.length) {
     return res.status(400).json({
-      success: false,
-      error: 'At least one yarn issue line is required.',
+      success:false,
+      error:'At least one yarn issue line is required.'
     });
   }
 
-  if (issueDate && !/^\d{4}-\d{2}-\d{2}$/.test(issueDate)) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(issueDate)) {
     return res.status(400).json({
-      success: false,
-      error: 'Issue date must be in YYYY-MM-DD format.',
+      success:false,
+      error:'Issue date must be in YYYY-MM-DD format.'
     });
   }
 
@@ -622,1113 +357,402 @@ router.post('/issue-batch', async (req, res) => {
   try {
     await client.query('BEGIN');
 
-    const saved = [];
+    const grouped = new Map();
 
     for (const raw of entries) {
-      const jobId = Number(raw?.job_id ?? raw?.jobId);
+      const jobId = clean(raw?.job_id ?? raw?.jobId);
       const yarnLotId = clean(raw?.yarn_lot_id ?? raw?.yarnLotId);
       const locationId = clean(raw?.location_id ?? raw?.locationId);
-      const quantity = Number(raw?.quantity);
-      const remarks = clean(raw?.remarks);
+      const machineId = clean(raw?.machine_id ?? raw?.machineId);
+      const quantity = number(raw?.quantity ?? raw?.quantity_kg);
+      const remarks = clean(raw?.remarks) || null;
 
-      if (!Number.isInteger(jobId) || jobId <= 0) {
-        throw new Error('Invalid job ID in yarn issue batch.');
-      }
+      if (!isUuid(jobId)) throw new Error('Invalid job ID in yarn issue batch.');
+      if (!isUuid(yarnLotId)) throw new Error('Invalid yarn lot ID in yarn issue batch.');
+      if (!isUuid(locationId)) throw new Error('A valid stock location is required for every issue line.');
+      if (machineId && !isUuid(machineId)) throw new Error('Invalid machine ID in yarn issue batch.');
+      if (quantity <= 0) throw new Error('Yarn issue quantity must be greater than zero.');
 
-      if (!yarnLotId || !isUuid(yarnLotId)) {
-        throw new Error('Invalid yarn lot ID in yarn issue batch.');
-      }
+      if (!grouped.has(jobId)) grouped.set(jobId, []);
+      grouped.get(jobId).push({
+        yarnLotId, locationId, machineId: machineId || null, quantity, remarks
+      });
+    }
 
-      if (!locationId || !isUuid(locationId)) {
-        throw new Error('A valid stock location is required for every issue line.');
-      }
+    const saved = [];
 
-      if (!Number.isFinite(quantity) || quantity <= 0) {
-        throw new Error('Yarn issue quantity must be greater than zero.');
-      }
-
+    for (const [jobId, lines] of grouped.entries()) {
       const job = await client.query(`
-        SELECT id, job_no, party_id
-        FROM job_orders
-        WHERE id = $1
-        LIMIT 1
-      `, [jobId]);
+        SELECT id,job_no,company_id
+        FROM jobwork.job_orders
+        WHERE id=$1 AND company_id=$2
+        FOR SHARE
+      `,[jobId,COMPANY_ID]);
 
-      if (job.rows.length === 0) {
+      if (!job.rows.length) {
         throw new Error(`Job order ${jobId} was not found.`);
       }
 
-      const lot = await client.query(`
-        SELECT
-          yl.id,
-          yl.company_id,
-          yl.yarn_id,
-          yl.lot_no,
-          yl.color_id,
-          y.name AS yarn_name,
-          COALESCE(ccol.name, '') AS color_name
-        FROM master.yarn_lots yl
-        JOIN master.yarns y
-          ON y.id = yl.yarn_id
-        LEFT JOIN master.colors ccol
-          ON ccol.id = yl.color_id
-        WHERE yl.id = $1
-        LIMIT 1
-      `, [yarnLotId]);
+      const financialYearId = await currentFinancialYear(client,COMPANY_ID);
+      const issueNo = await nextIssueNo(client,COMPANY_ID,financialYearId);
 
-      if (lot.rows.length === 0) {
-        throw new Error(`Yarn lot ${yarnLotId} was not found.`);
-      }
-
-      const lotRow = lot.rows[0];
-
-      const location = await client.query(`
-        SELECT id, name
-        FROM master.locations
-        WHERE id = $1
-          AND COALESCE(is_active, true) = true
-        LIMIT 1
-      `, [locationId]);
-
-      if (location.rows.length === 0) {
-        throw new Error('Selected yarn stock location was not found or is inactive.');
-      }
-
-      const balanceResult = await client.query(`
-        SELECT COALESCE(SUM(quantity_in - quantity_out), 0)::float AS balance
-        FROM inventory.yarn_ledger
-        WHERE yarn_lot_id = $1
-          AND location_id = $2
-      `, [yarnLotId, locationId]);
-
-      const balance = Number(balanceResult.rows[0].balance || 0);
-
-      if (balance + 0.000001 < quantity) {
-        throw new Error(
-          `Insufficient stock for ${lotRow.yarn_name} / ${lotRow.lot_no}. Available: ${balance.toFixed(2)} kg.`
-        );
-      }
-
-      // If this job has yarn requirements, ensure the selected yarn is one
-      // of the requested yarns. Jobs without a requirement remain issuable.
-      const requirement = await client.query(`
-        SELECT joy.id
-        FROM job_order_yarns joy
-        JOIN master.yarns jy
-          ON LOWER(TRIM(jy.name)) = LOWER(TRIM(joy.yarn_name))
-         AND (
-           joy.yarn_count IS NULL
-           OR TRIM(joy.yarn_count) = ''
-           OR LOWER(TRIM(jy.count)) = LOWER(TRIM(joy.yarn_count))
-         )
-        WHERE joy.job_order_id = $1
-          AND jy.id = $2
-        ORDER BY joy.id
-        LIMIT 1
-        FOR UPDATE OF joy
-      `, [jobId, lotRow.yarn_id]);
-
-      const anyRequirements = await client.query(`
-        SELECT 1
-        FROM job_order_yarns
-        WHERE job_order_id = $1
-        LIMIT 1
-      `, [jobId]);
-
-      if (anyRequirements.rows.length > 0 && requirement.rows.length === 0) {
-        throw new Error(
-          `${lotRow.yarn_name} is not one of the yarns required for job ${job.rows[0].job_no}.`
-        );
-      }
-
-      const result = await client.query(`
-        INSERT INTO inventory.yarn_ledger (
-          company_id,
-          financial_year_id,
-          yarn_lot_id,
-          location_id,
-          movement_date,
-          movement_type,
-          quantity_in,
-          quantity_out,
-          reference_type,
-          reference_id,
-          remarks
+      const issue = await client.query(`
+        INSERT INTO jobwork.yarn_issues(
+          company_id,financial_year_id,issue_no,issue_date,
+          job_order_id,status,notes
         )
-        SELECT
-          $1,
-          fy.id,
-          $2,
-          $3,
-          COALESCE($6::date, CURRENT_DATE),
-          'ISSUE',
-          0,
-          $4,
-          'YARN_ISSUE',
-          md5('job:' || $5::text)::uuid,
-          $7
-        FROM core.financial_years fy
-        WHERE fy.company_id = $1
-          AND fy.is_current = true
-          AND fy.is_closed = false
-        ORDER BY fy.start_date DESC
-        LIMIT 1
-        RETURNING
-          id,
-          movement_date,
-          movement_type,
-          quantity_out,
-          reference_id,
-          remarks
-      `, [
-        lotRow.company_id,
-        yarnLotId,
-        locationId,
-        quantity,
-        jobId,
-        remarks,
+        VALUES($1,$2,$3,$4,$5,'DRAFT',$6)
+        RETURNING id,issue_no,issue_date,job_order_id
+      `,[
+        COMPANY_ID,
+        financialYearId,
+        issueNo,
         issueDate,
+        jobId,
+        lines.map((x)=>x.remarks).filter(Boolean).join('; ') || null
       ]);
 
-      if (result.rows.length === 0) {
-        throw new Error(
-          `No open financial year exists for yarn stock owner of ${lotRow.yarn_name}.`
-        );
-      }
+      for (const line of lines) {
+        const lot = await client.query(`
+          SELECT
+            yl.id,yl.company_id,yl.yarn_id,yl.lot_no,
+            COALESCE(y.name,'') AS yarn_name,
+            COALESCE(c.name,'') AS color_name
+          FROM master.yarn_lots yl
+          JOIN master.yarns y ON y.id=yl.yarn_id
+          LEFT JOIN master.colors c ON c.id=yl.color_id
+          WHERE yl.id=$1
+            AND yl.company_id=$2
+            AND COALESCE(yl.is_active,true)=true
+          FOR SHARE
+        `,[line.yarnLotId,COMPANY_ID]);
 
-      // Keep the job's yarn requirement in sync with the actual issue.
-      // The ledger remains the source of truth; this field is maintained
-      // for the Job Order UI and existing workflows.
-      if (requirement.rows.length > 0) {
+        if (!lot.rows.length) {
+          throw new Error(`Yarn lot ${line.yarnLotId} was not found.`);
+        }
+
+        const location = await client.query(`
+          SELECT id,name
+          FROM master.locations
+          WHERE id=$1
+            AND company_id=$2
+            AND COALESCE(is_active,true)=true
+        `,[line.locationId,COMPANY_ID]);
+
+        if (!location.rows.length) {
+          throw new Error(`Stock location ${line.locationId} was not found or is inactive.`);
+        }
+
+        if (line.machineId) {
+          const machine = await client.query(`
+            SELECT id
+            FROM master.machines
+            WHERE id=$1 AND company_id=$2 AND COALESCE(is_active,true)=true
+          `,[line.machineId,COMPANY_ID]);
+
+          if (!machine.rows.length) {
+            throw new Error(`Machine ${line.machineId} was not found or is inactive.`);
+          }
+        }
+
         await client.query(`
-          UPDATE job_order_yarns
-          SET issued_kg = COALESCE(issued_kg, 0) + $1,
-              updated_at = NOW()
-          WHERE id = $2
-        `, [quantity, requirement.rows[0].id]);
+          INSERT INTO jobwork.yarn_issue_lines(
+            issue_id,yarn_lot_id,location_id,yarn_id,machine_id,quantity_kg,remarks
+          )
+          VALUES($1,$2,$3,$4,$5,$6,$7)
+        `,[
+          issue.rows[0].id,
+          line.yarnLotId,
+          line.locationId,
+          lot.rows[0].yarn_id,
+          line.machineId,
+          line.quantity,
+          line.remarks
+        ]);
+
+        saved.push({
+          issue_id:issue.rows[0].id,
+          issue_no:issue.rows[0].issue_no,
+          job_id:jobId,
+          job_no:job.rows[0].job_no,
+          yarn_lot_id:line.yarnLotId,
+          yarn_id:lot.rows[0].yarn_id,
+          yarn_name:lot.rows[0].yarn_name,
+          color_name:lot.rows[0].color_name,
+          location_id:line.locationId,
+          location_name:location.rows[0].name,
+          quantity:line.quantity
+        });
       }
 
-      saved.push({
-        ...result.rows[0],
-        job_id: jobId,
-        job_no: job.rows[0].job_no,
-        yarn_lot_id: yarnLotId,
-        yarn_id: lotRow.yarn_id,
-        yarn_name: lotRow.yarn_name,
-        color_name: lotRow.color_name,
-        location_id: locationId,
-        location_name: location.rows[0].name,
-        quantity: quantity,
-      });
+      await client.query(`SELECT jobwork.post_yarn_issue($1)`,[issue.rows[0].id]);
     }
 
     await client.query('COMMIT');
 
-    return res.status(201).json({
-      success: true,
-      count: saved.length,
-      message: `Yarn issue posted successfully. ${saved.length} line(s) saved.`,
-      issues: saved,
+    res.status(201).json({
+      success:true,
+      count:saved.length,
+      message:`Yarn issue posted successfully. ${saved.length} line(s) saved.`,
+      issues:saved
     });
   } catch (error) {
     await client.query('ROLLBACK');
-    console.error('Yarn issue batch failed:', error);
+    console.error('Yarn issue batch failed:',error);
 
-    return res.status(500).json({
-      success: false,
-      error: error.message || 'Failed to post yarn issue batch.',
+    res.status(500).json({
+      success:false,
+      error:error.message || 'Failed to post yarn issue batch.'
     });
   } finally {
     client.release();
   }
 });
 
-// ============================================================
-// RECEIPT DETAIL
-//
-// GET /api/yarn-receipts/:id
-// ============================================================
+// ------------------------------------------------------------
+// Receipt detail
+// ------------------------------------------------------------
 
-router.get('/:id', async (req, res) => {
+router.get('/:id', async (req,res) => {
   try {
-    const receipt = await pool.query(
-      `
+    const receipt = await pool.query(`
       SELECT
         r.*,
-
         c.code AS company_code,
         c.name AS company_name,
-
         p.name AS supplier_name,
-
         l.name AS location_name
-
       FROM inventory.yarn_receipts r
+      LEFT JOIN core.companies c ON c.id=r.company_id
+      LEFT JOIN master.parties p ON p.id=r.party_id
+      LEFT JOIN master.locations l ON l.id=r.location_id
+      WHERE r.id=$1
+    `,[req.params.id]);
 
-      LEFT JOIN core.companies c
-        ON c.id = r.company_id
-
-      LEFT JOIN master.parties p
-        ON p.id = r.party_id
-
-      LEFT JOIN master.locations l
-        ON l.id = r.location_id
-
-      WHERE r.id = $1
-      `,
-      [req.params.id]
-    );
-
-    if (receipt.rows.length === 0) {
-      return res.status(404).json({
-        success: false,
-        error: 'Yarn receipt not found.',
-      });
+    if (!receipt.rows.length) {
+      return res.status(404).json({success:false,error:'Yarn receipt not found.'});
     }
 
-    const lines = await pool.query(
-      `
+    const lines = await pool.query(`
       SELECT
         rl.id,
         rl.yarn_lot_id,
         rl.quantity,
         rl.unit_rate,
+        rl.box_count,
         rl.notes,
-
         yl.lot_no,
         yl.supplier_lot_no,
         yl.color_id,
-        ccol.code AS color_code,
-        ccol.name AS color_name,
-
+        c.code AS color_code,
+        c.name AS color_name,
         y.id AS yarn_id,
         y.code AS yarn_code,
         y.name AS yarn_name,
-        y.count AS yarn_count,
-        y.composition,
-        y.colour
-
+        '' AS yarn_count,
+        '' AS composition
       FROM inventory.yarn_receipt_lines rl
-
-      JOIN master.yarn_lots yl
-        ON yl.id = rl.yarn_lot_id
-
-      JOIN master.yarns y
-        ON y.id = yl.yarn_id
-
-      LEFT JOIN master.colors ccol
-        ON ccol.id = yl.color_id
-
-      WHERE rl.receipt_id = $1
-
+      JOIN master.yarn_lots yl ON yl.id=rl.yarn_lot_id
+      JOIN master.yarns y ON y.id=yl.yarn_id
+      LEFT JOIN master.colors c ON c.id=yl.color_id
+      WHERE rl.receipt_id=$1
       ORDER BY rl.id
-      `,
-      [req.params.id]
-    );
+    `,[req.params.id]);
 
-    return res.json({
-      success: true,
-      receipt: receipt.rows[0],
-      lines: lines.rows,
+    res.json({
+      success:true,
+      receipt:receipt.rows[0],
+      lines:lines.rows
     });
   } catch (error) {
-    console.error('Yarn receipt detail error:', error);
-
-    return res.status(500).json({
-      success: false,
-      error: 'Failed to load yarn receipt',
-      details: error.message,
-    });
+    console.error('Yarn receipt detail error:',error);
+    res.status(500).json({success:false,error:'Failed to load yarn receipt',details:error.message});
   }
 });
 
-// ============================================================
-// CREATE / POST RECEIPT
-//
-// POST /api/yarn-receipts
-//
-// Creates:
-//
-// 1. Receipt header
-// 2. Supplier mapping
-// 3. Yarn lot(s)
-// 4. Receipt line(s)
-// 5. Stock ledger movement(s)
-//
-// Multiple yarns can be posted under ONE receipt.
-// ============================================================
+// ------------------------------------------------------------
+// Create receipt
+// ------------------------------------------------------------
 
-router.post('/', async (req, res) => {
+router.post('/', async (req,res) => {
   const client = await pool.connect();
 
   try {
-    const companyId = clean(req.body.company_id);
-    const receiptDate = clean(req.body.receipt_date);
-    const challanNo = clean(req.body.challan_no);
-    const billNo = clean(req.body.bill_no);
+    const companyId = clean(req.body?.company_id) || COMPANY_ID;
+    const receiptDate = clean(req.body?.receipt_date) || new Date().toISOString().slice(0,10);
+    const challanNo = clean(req.body?.challan_no) || null;
+    const billNo = clean(req.body?.bill_no) || null;
+    const referenceNo = clean(req.body?.reference_no) || null;
+    const supplierId = clean(req.body?.party_id);
+    const locationId = clean(req.body?.location_id);
+    const notes = clean(req.body?.notes) || null;
+    const lines = Array.isArray(req.body?.lines) ? req.body.lines : [];
 
-    const supplierId = clean(req.body.party_id);
-    const locationId = clean(req.body.location_id);
-
-    const notes = clean(req.body.notes);
-    const lines = req.body.lines;
-
-    // ========================================================
-    // BASIC VALIDATION
-    // ========================================================
-
-    if (!companyId || !isUuid(companyId)) {
-      return res.status(400).json({
-        success: false,
-        error: 'Company is required.',
-      });
-    }
-
-    if (!receiptDate) {
-      return res.status(400).json({
-        success: false,
-        error: 'Receipt date is required.',
-      });
-    }
-
-    if (!supplierId) {
-      return res.status(400).json({
-        success: false,
-        error: 'Supplier is required.',
-      });
-    }
-
-    if (!Array.isArray(lines) || lines.length === 0) {
-      return res.status(400).json({
-        success: false,
-        error: 'At least one yarn line is required.',
-      });
-    }
-
-    // ========================================================
-    // VALIDATE LINES
-    // ========================================================
-
-    for (let i = 0; i < lines.length; i++) {
-      const line = lines[i] || {};
-
-      if (!clean(line.yarn_id)) {
-        return res.status(400).json({
-          success: false,
-          error: `Yarn is required on line ${i + 1}.`,
-        });
-      }
-
-      const colorId = clean(line.color_id);
-
-      if (!colorId || !isUuid(colorId)) {
-        return res.status(400).json({
-          success: false,
-          error: `Color is required on line ${i + 1}.`,
-        });
-      }
-
-      const boxCount = line.box_count === null || line.box_count === undefined || line.box_count === ''
-        ? null
-        : Number(line.box_count);
-
-      if (boxCount !== null && (!Number.isInteger(boxCount) || boxCount < 0)) {
-        return res.status(400).json({
-          success: false,
-          error: `No. of boxes must be a whole number of zero or more on line ${i + 1}.`,
-        });
-      }
-
-      const qty = Number(line.quantity);
-
-      if (!Number.isFinite(qty) || qty <= 0) {
-        return res.status(400).json({
-          success: false,
-          error: `Quantity must be greater than zero on line ${i + 1}.`,
-        });
-      }
-
-      if (
-        line.unit_rate !== null &&
-        line.unit_rate !== undefined &&
-        line.unit_rate !== ''
-      ) {
-        const rate = Number(line.unit_rate);
-
-        if (!Number.isFinite(rate) || rate < 0) {
-          return res.status(400).json({
-            success: false,
-            error: `Invalid rate on line ${i + 1}.`,
-          });
-        }
-      }
-    }
+    if (!isUuid(companyId)) return res.status(400).json({success:false,error:'Company is required.'});
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(receiptDate)) return res.status(400).json({success:false,error:'Receipt date must be YYYY-MM-DD.'});
+    if (!isUuid(supplierId)) return res.status(400).json({success:false,error:'A valid supplier is required.'});
+    if (!isUuid(locationId)) return res.status(400).json({success:false,error:'A valid yarn storage location is required.'});
+    if (!lines.length) return res.status(400).json({success:false,error:'At least one yarn line is required.'});
 
     await client.query('BEGIN');
-    
-    // ========================================================
-    // COMPANY
-    // ========================================================
 
     const company = await client.query(`
-      SELECT id, code, name
-      FROM core.companies
-      WHERE id = $1
-        AND COALESCE(is_active, true) = true
-      LIMIT 1
-    `, [companyId]);
+      SELECT id FROM core.companies
+      WHERE id=$1 AND COALESCE(is_active,true)=true
+    `,[companyId]);
 
-    if (company.rows.length === 0) {
-      throw new Error('Selected company is invalid or inactive.');
+    if (!company.rows.length) throw new Error('Company not found or inactive.');
+
+    const supplier = await client.query(`
+      SELECT p.id
+      FROM master.parties p
+      JOIN master.party_role_assignments pra ON pra.party_id=p.id
+      JOIN master.party_roles pr ON pr.id=pra.role_id
+      WHERE p.id=$1
+        AND p.company_id=$2
+        AND COALESCE(p.is_active,true)=true
+        AND LOWER(pr.name)='yarn supplier'
+      LIMIT 1
+    `,[supplierId,companyId]);
+
+    if (!supplier.rows.length) {
+      throw new Error('Selected supplier is not an active Yarn Supplier.');
     }
 
-    // ========================================================
-    // CURRENT FINANCIAL YEAR
-    // ========================================================
+    const location = await client.query(`
+      SELECT id FROM master.locations
+      WHERE id=$1 AND company_id=$2 AND COALESCE(is_active,true)=true
+    `,[locationId,companyId]);
 
-    const fy = await client.query(`
-      SELECT id
-      FROM core.financial_years
-      WHERE company_id = $1
-        AND is_current = true
-        AND is_closed = false
-      ORDER BY start_date DESC
-      LIMIT 1
-    `, [companyId]);
+    if (!location.rows.length) throw new Error('Selected location was not found or is inactive.');
 
-    if (fy.rows.length === 0) {
-      throw new Error(
-        'No open current financial year exists for the selected company.'
-      );
-    }
+    const financialYearId = await currentFinancialYear(client,companyId);
+    const receiptNo = await nextReceiptNo(client,companyId,financialYearId);
 
-    const financialYearId = fy.rows[0].id;
-
-
-    
-    // ========================================================
-    // SUPPLIER
-    //
-    // Existing Parties module:
-    //   parties.id
-    //   party_roles.party_id
-    //   party_roles.role
-    //
-    // We find the selected Yarn Supplier here.
-    // ========================================================
-
-    const supplier = await client.query(
-      `
-      SELECT DISTINCT
-        p.id,
-        p.party_code,
-        p.name,
-        p.gstin,
-        p.pan,
-        p.address_line1,
-        p.address_line2,
-        p.city,
-        p.state,
-        p.pin_code,
-        p.country,
-        p.phone,
-        p.email,
-        p.notes
-
-      FROM parties p
-
-      JOIN party_roles pr
-        ON pr.party_id = p.id
-
-      WHERE p.id = $1
-        AND COALESCE(p.is_active, true) = true
-        AND LOWER(pr.role) = 'yarn supplier'
-
-      LIMIT 1
-      `,
-      [supplierId]
-    );
-
-    if (supplier.rows.length === 0) {
-      throw new Error(
-        'Selected supplier is not an active Yarn Supplier.'
-      );
-    }
-
-    const legacySupplier = supplier.rows[0];
-
-    // ========================================================
-    // MASTER PARTY BRIDGE
-    //
-    // Inventory uses UUID master.parties.
-    //
-    // Existing Parties module uses the legacy parties table.
-    //
-    // We create/reuse the corresponding master party.
-    // ========================================================
-
-    let masterParty = await client.query(
-      `
-      SELECT id
-
-      FROM master.parties
-
-      WHERE company_id = $1
-        AND code = $2
-
-      LIMIT 1
-      `,
-      [
-        companyId,
-        legacySupplier.party_code,
-      ]
-    );
-
-    let masterPartyId;
-
-    if (masterParty.rows.length > 0) {
-      masterPartyId = masterParty.rows[0].id;
-    } else {
-      const insertedParty = await client.query(
-        `
-        INSERT INTO master.parties (
-          company_id,
-          code,
-          name,
-          legal_name,
-          gstin,
-          pan,
-          address_line1,
-          address_line2,
-          city,
-          state,
-          pincode,
-          country,
-          phone,
-          email,
-          is_active,
-          notes
-        )
-
-        VALUES (
-          $1,
-          $2,
-          $3,
-          $3,
-          $4,
-          $5,
-          $6,
-          $7,
-          $8,
-          $9,
-          $10,
-          COALESCE($11, 'India'),
-          $12,
-          $13,
-          true,
-          $14
-        )
-
-        RETURNING id
-        `,
-        [
-          companyId,
-          legacySupplier.party_code,
-          legacySupplier.name,
-          legacySupplier.gstin,
-          legacySupplier.pan,
-          legacySupplier.address_line1,
-          legacySupplier.address_line2,
-          legacySupplier.city,
-          legacySupplier.state,
-          legacySupplier.pin_code,
-          legacySupplier.country,
-          legacySupplier.phone,
-          legacySupplier.email,
-          legacySupplier.notes,
-        ]
-      );
-
-      masterPartyId = insertedParty.rows[0].id;
-    }
-
-    // ========================================================
-    // ENSURE YARN SUPPLIER ROLE EXISTS
-    // ========================================================
-
-    const role = await client.query(`
-      SELECT id
-
-      FROM master.party_roles
-
-      WHERE UPPER(code) = 'YARN_SUPPLIER'
-         OR LOWER(name) = 'yarn supplier'
-
-      LIMIT 1
-    `);
-
-    let roleId;
-
-    if (role.rows.length > 0) {
-      roleId = role.rows[0].id;
-    } else {
-      const insertedRole = await client.query(`
-        INSERT INTO master.party_roles (
-          code,
-          name
-        )
-
-        VALUES (
-          'YARN_SUPPLIER',
-          'Yarn Supplier'
-        )
-
-        ON CONFLICT (code)
-        DO UPDATE SET name = EXCLUDED.name
-
-        RETURNING id
-      `);
-
-      roleId = insertedRole.rows[0].id;
-    }
-
-    await client.query(
-      `
-      INSERT INTO master.party_role_assignments (
-        party_id,
-        role_id
+    const receipt = await client.query(`
+      INSERT INTO inventory.yarn_receipts(
+        company_id,financial_year_id,receipt_no,receipt_date,
+        party_id,location_id,reference_no,challan_no,bill_no,
+        status,notes
       )
-
-      VALUES ($1, $2)
-
-      ON CONFLICT DO NOTHING
-      `,
-      [
-        masterPartyId,
-        roleId,
-      ]
-    );
-
-    // ========================================================
-    // LOCATION
-    // ========================================================
-
-    if (locationId) {
-      const location = await client.query(
-        `
-        SELECT id
-        FROM master.locations
-        WHERE id = $1
-          AND COALESCE(is_active, true) = true
-        LIMIT 1
-        `,
-        [locationId]
-      );
-
-      if (location.rows.length === 0) {
-        throw new Error(
-          'Selected location does not exist or is inactive.'
-        );
-      }
-    }
-
-    // ========================================================
-    // RECEIPT NUMBER
-    // ========================================================
-
-    const receiptNumberResult = await client.query(
-      `
-      SELECT
-        COALESCE(
-          MAX(
-            CAST(
-              NULLIF(
-                SUBSTRING(
-                  receipt_no
-                  FROM '^YR-([0-9]+)$'
-                ),
-                ''
-              )
-              AS INTEGER
-            )
-          ),
-          0
-        ) + 1 AS next_no
-
-      FROM inventory.yarn_receipts
-
-      WHERE company_id = $1
-        AND receipt_no LIKE 'YR-%'
-      `,
-      [companyId]
-    );
-
-    const nextReceiptNumber = Number(
-      receiptNumberResult.rows[0].next_no
-    );
-
-    const receiptNo =
-      `YR-${String(nextReceiptNumber).padStart(6, '0')}`;
-
-    // ========================================================
-    // RECEIPT HEADER
-    // ========================================================
-
-    const receiptResult = await client.query(
-      `
-      INSERT INTO inventory.yarn_receipts (
-        company_id,
-        financial_year_id,
-        receipt_no,
-        receipt_date,
-        party_id,
-        location_id,
-        challan_no,
-        bill_no,
-        notes,
-        status
-      )
-
-      VALUES (
-        $1,
-        $2,
-        $3,
-        $4,
-        $5,
-        $6,
-        $7,
-        $8,
-        $9,
-        'POSTED'
-      )
-
-      RETURNING
-        id,
-        company_id,
-        receipt_no,
-        receipt_date,
-        challan_no,
-        bill_no,
-        status
-      `,
-      [
-        companyId,
-        financialYearId,
-        receiptNo,
-        receiptDate,
-        masterPartyId,
-        locationId,
-        challanNo,
-        billNo,
-        notes,
-      ]
-    );
-
-    const receipt = receiptResult.rows[0];
+      VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,'POSTED',$10)
+      RETURNING id,receipt_no,receipt_date,status
+    `,[
+      companyId,financialYearId,receiptNo,receiptDate,
+      supplierId,locationId,referenceNo,challanNo,billNo,notes
+    ]);
 
     const createdLines = [];
 
-    // ========================================================
-    // PROCESS EACH YARN LINE
-    // ========================================================
-
-    for (const line of lines) {
+    for (let i=0;i<lines.length;i++) {
+      const line = lines[i] || {};
       const yarnId = clean(line.yarn_id);
       const colorId = clean(line.color_id);
+      const quantity = number(line.quantity);
+      const boxCount = line.box_count == null || line.box_count === ''
+        ? null : Number(line.box_count);
+      const unitRate = line.unit_rate == null || line.unit_rate === ''
+        ? null : Number(line.unit_rate);
+      const supplierLotNo = clean(line.supplier_lot_no) || null;
+      const lotNo = clean(line.lot_no) || `${receiptNo}-${String(i+1).padStart(2,'0')}`;
+      const lineNotes = clean(line.notes) || null;
 
-      const supplierLotNo =
-        clean(line.supplier_lot_no);
+      if (!isUuid(yarnId)) throw new Error(`Valid yarn is required on line ${i+1}.`);
+      if (!isUuid(colorId)) throw new Error(`Valid color is required on line ${i+1}.`);
+      if (quantity <= 0) throw new Error(`Quantity must be greater than zero on line ${i+1}.`);
+      if (boxCount != null && (!Number.isInteger(boxCount) || boxCount < 0)) throw new Error(`Invalid box count on line ${i+1}.`);
+      if (unitRate != null && (!Number.isFinite(unitRate) || unitRate < 0)) throw new Error(`Invalid unit rate on line ${i+1}.`);
 
-      const quantity =
-        Number(line.quantity);
+      const yarn = await client.query(`
+        SELECT id FROM master.yarns
+        WHERE id=$1
+          AND (company_id=$2 OR company_id IS NULL)
+          AND COALESCE(is_active,true)=true
+      `,[yarnId,companyId]);
 
-      const boxCount = line.box_count === null || line.box_count === undefined || line.box_count === ''
-        ? null
-        : Number(line.box_count);
+      if (!yarn.rows.length) throw new Error(`Yarn ${yarnId} was not found or is inactive.`);
 
-      const unitRate =
-        line.unit_rate === null ||
-        line.unit_rate === undefined ||
-        line.unit_rate === ''
-          ? null
-          : Number(line.unit_rate);
+      const color = await client.query(`
+        SELECT id FROM master.colors
+        WHERE id=$1 AND COALESCE(is_active,true)=true
+      `,[colorId]);
 
-      const lineNotes =
-        clean(line.notes);
+      if (!color.rows.length) throw new Error(`Color ${colorId} was not found or is inactive.`);
 
-      // ======================================================
-      // VALIDATE YARN MASTER
-      // ======================================================
-
-      const yarn = await client.query(
-        `
-        SELECT id
-
-        FROM master.yarns
-
-        WHERE id = $1
-          AND COALESCE(is_active, true) = true
-
-        LIMIT 1
-        `,
-        [yarnId]
-      );
-
-      if (yarn.rows.length === 0) {
-        throw new Error(
-          `Yarn ${yarnId} does not exist or is inactive.`
-        );
-      }
-
-      let yarnLotId;
-
-      // ======================================================
-      // REUSE EXISTING SUPPLIER LOT
-      // ======================================================
-
-      if (supplierLotNo) {
-        const existingLot = await client.query(
-          `
-          SELECT id
-
-          FROM master.yarn_lots
-
-          WHERE company_id = $1
-            AND yarn_id = $2
-            AND supplier_party_id = $3
-            AND supplier_lot_no = $4
-            AND color_id = $5
-
-          LIMIT 1
-          `,
-          [
-            companyId,
-            yarnId,
-            masterPartyId,
-            supplierLotNo,
-            colorId,
-          ]
-        );
-
-        if (existingLot.rows.length > 0) {
-          yarnLotId =
-            existingLot.rows[0].id;
-        }
-      }
-
-      // ======================================================
-      // CREATE NEW INTERNAL LOT
-      // ======================================================
-
-      if (!yarnLotId) {
-        const lotNumberResult = await client.query(
-          `
-          SELECT
-            COALESCE(
-              MAX(
-                CAST(
-                  NULLIF(
-                    SUBSTRING(
-                      lot_no
-                      FROM '^YL-([0-9]+)$'
-                    ),
-                    ''
-                  )
-                  AS INTEGER
-                )
-              ),
-              0
-            ) + 1 AS next_no
-
-          FROM master.yarn_lots
-
-          WHERE company_id = $1
-            AND lot_no LIKE 'YL-%'
-          `,
-          [companyId]
-        );
-
-        const nextLotNumber =
-          Number(
-            lotNumberResult.rows[0].next_no
-          );
-
-        const lotNo =
-          `YL-${String(nextLotNumber).padStart(6, '0')}`;
-
-        const lotResult = await client.query(
-          `
-          INSERT INTO master.yarn_lots (
-            company_id,
-            yarn_id,
-            lot_no,
-            supplier_party_id,
-            supplier_lot_no,
-            color_id,
-            received_date,
-            notes
-          )
-
-          VALUES (
-            $1,
-            $2,
-            $3,
-            $4,
-            $5,
-            $6,
-            $7,
-            $8
-          )
-
-          RETURNING
-            id,
-            lot_no
-          `,
-          [
-            companyId,
-            yarnId,
-            lotNo,
-            masterPartyId,
-            supplierLotNo,
-            colorId,
-            receiptDate,
-            lineNotes,
-          ]
-        );
-
-        yarnLotId =
-          lotResult.rows[0].id;
-      }
-
-      // ======================================================
-      // RECEIPT LINE
-      // ======================================================
-
-      await client.query(
-        `
-        INSERT INTO inventory.yarn_receipt_lines (
-          receipt_id,
-          yarn_lot_id,
-          quantity,
-          box_count,
-          unit_rate,
-          notes
+      const lot = await client.query(`
+        INSERT INTO master.yarn_lots(
+          company_id,lot_no,yarn_id,color_id,supplier_party_id,
+          supplier_lot_no,received_date,remarks,is_active
         )
+        VALUES($1,$2,$3,$4,$5,$6,$7,$8,true)
+        ON CONFLICT (company_id,yarn_id,lot_no)
+        DO UPDATE SET
+          color_id=EXCLUDED.color_id,
+          supplier_party_id=EXCLUDED.supplier_party_id,
+          supplier_lot_no=EXCLUDED.supplier_lot_no,
+          received_date=EXCLUDED.received_date,
+          remarks=EXCLUDED.remarks,
+          is_active=true,
+          updated_at=NOW()
+        RETURNING id
+      `,[
+        companyId,lotNo,yarnId,colorId,supplierId,
+        supplierLotNo,receiptDate,lineNotes
+      ]);
 
-        VALUES (
-          $1,
-          $2,
-          $3,
-          $4,
-          $5,
-          $6
+      const yarnLotId = lot.rows[0].id;
+
+      await client.query(`
+        INSERT INTO inventory.yarn_receipt_lines(
+          receipt_id,yarn_lot_id,quantity,unit_rate,box_count,notes
         )
-        `,
-        [
-          receipt.id,
-          yarnLotId,
-          quantity,
-          boxCount,
-          unitRate,
-          lineNotes,
-        ]
-      );
+        VALUES($1,$2,$3,$4,$5,$6)
+      `,[
+        receipt.rows[0].id,yarnLotId,quantity,unitRate,boxCount,lineNotes
+      ]);
 
-      // ======================================================
-      // STOCK LEDGER
-      // ======================================================
-
-      await client.query(
-        `
-        INSERT INTO inventory.yarn_ledger (
-          company_id,
-          financial_year_id,
-          yarn_lot_id,
-          location_id,
-          movement_date,
-          movement_type,
-          quantity_in,
-          quantity_out,
-          reference_type,
-          reference_id,
-          remarks
+      await client.query(`
+        INSERT INTO inventory.yarn_ledger(
+          company_id,financial_year_id,yarn_lot_id,location_id,
+          movement_date,movement_type,quantity_in,quantity_out,
+          reference_type,reference_id,remarks
         )
-
-        VALUES (
-          $1,
-          $2,
-          $3,
-          $4,
-          $5,
-          'RECEIPT',
-          $6,
-          0,
-          'YARN_RECEIPT',
-          $7,
-          $8
-        )
-        `,
-        [
-          companyId,
-          financialYearId,
-          yarnLotId,
-          locationId,
-          receiptDate,
-          quantity,
-          receipt.id,
-          lineNotes,
-        ]
-      );
+        VALUES($1,$2,$3,$4,$5,'RECEIPT',$6,0,'YARN_RECEIPT',$7,$8)
+      `,[
+        companyId,financialYearId,yarnLotId,locationId,
+        receiptDate,quantity,receipt.rows[0].id,lineNotes
+      ]);
 
       createdLines.push({
-        yarn_id: yarnId,
-        yarn_lot_id: yarnLotId,
-        quantity: quantity,
-        box_count: boxCount,
-        unit_rate: unitRate,
-        supplier_lot_no: supplierLotNo,
+        yarn_id:yarnId,
+        yarn_lot_id:yarnLotId,
+        lot_no:lotNo,
+        quantity,
+        box_count:boxCount,
+        unit_rate:unitRate,
+        supplier_lot_no:supplierLotNo
       });
     }
 
-    // ========================================================
-    // COMMIT
-    // ========================================================
-
     await client.query('COMMIT');
 
-    return res.status(201).json({
-      success: true,
-      message: 'Yarn receipt posted successfully.',
-      receipt: receipt,
-      lines: createdLines,
+    res.status(201).json({
+      success:true,
+      message:'Yarn receipt posted successfully.',
+      receipt:receipt.rows[0],
+      lines:createdLines
     });
-
   } catch (error) {
-    try {
-      await client.query('ROLLBACK');
-    } catch (_) {
-      // Ignore rollback errors
-    }
+    await client.query('ROLLBACK');
+    console.error('Create yarn receipt failed:',error);
 
-    console.error(
-      'Create yarn receipt failed:',
-      error
-    );
-
-    return res.status(500).json({
-      success: false,
-      error:
-        error.message ||
-        'Failed to post yarn receipt.',
+    res.status(error.code === '23505' ? 409 : 500).json({
+      success:false,
+      error:error.message || 'Failed to post yarn receipt.'
     });
-
   } finally {
     client.release();
   }
 });
-
-// ============================================================
-// EXPORT
-// ============================================================
 
 module.exports = router;
