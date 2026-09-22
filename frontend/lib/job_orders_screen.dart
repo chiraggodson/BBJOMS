@@ -2251,8 +2251,9 @@ class _NewJobOrderDialogState extends State<_NewJobOrderDialog> {
               spacing: 8,
               runSpacing: 8,
               children: _machines.map((machine) {
+                final machineId = _machineIdForSelection(machine);
                 final selected =
-                    _selectedMachineIds.contains(machine.id);
+                    _selectedMachineIds.contains(machineId);
 
                 return FilterChip(
                   selected: selected,
@@ -2265,10 +2266,12 @@ class _NewJobOrderDialogState extends State<_NewJobOrderDialog> {
                   ),
                   onSelected: (value) {
                     setState(() {
+                      final machineId = _machineIdForSelection(machine);
+
                       if (value) {
-                        _selectedMachineIds.add(machine.id);
+                        _selectedMachineIds.add(machineId);
                       } else {
-                        _selectedMachineIds.remove(machine.id);
+                        _selectedMachineIds.remove(machineId);
                       }
                     });
                   },
@@ -3155,8 +3158,9 @@ class _EditJobOrderDialogState
               spacing: 8,
               runSpacing: 8,
               children: _machines.map((machine) {
+                final machineId = _machineIdForSelection(machine);
                 final selected =
-                    _selectedMachineIds.contains(machine.id);
+                    _selectedMachineIds.contains(machineId);
 
                 return FilterChip(
                   selected: selected,
@@ -3169,10 +3173,12 @@ class _EditJobOrderDialogState
                   ),
                   onSelected: (value) {
                     setState(() {
+                      final machineId = _machineIdForSelection(machine);
+
                       if (value) {
-                        _selectedMachineIds.add(machine.id);
+                        _selectedMachineIds.add(machineId);
                       } else {
-                        _selectedMachineIds.remove(machine.id);
+                        _selectedMachineIds.remove(machineId);
                       }
                     });
                   },
@@ -3595,6 +3601,19 @@ class _EditJobOrderDialogState
       onChanged: onChanged,
     );
   }
+}
+
+int _machineIdForSelection(Machine machine) {
+  // Machine IDs are numeric in BBJOMS. Some older / incomplete machine
+  // API responses may omit `id`, which the ApiService converts to 0.
+  // Never use 0 as the shared selection key because that makes every
+  // machine appear selected together.
+  if (machine.id > 0) {
+    return machine.id;
+  }
+
+  final fallback = int.tryParse(machine.machineNo.trim());
+  return fallback ?? -1;
 }
 
 class _SelectedJobYarn {

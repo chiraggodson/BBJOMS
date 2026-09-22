@@ -1,19 +1,10 @@
 const express = require('express');
 
 const router = express.Router();
-
 const { pool } = require('../db');
-
-// ============================================================
-// CURRENT COMPANY
-// ============================================================
 
 const COMPANY_ID =
   '37c8cd03-c8ae-48cd-b8e4-cb3e864f042f';
-
-// ============================================================
-// HELPERS
-// ============================================================
 
 function mapFabric(row) {
   return {
@@ -21,64 +12,37 @@ function mapFabric(row) {
     company_id: row.company_id,
     code: row.code || '',
     name: row.name || '',
-    product_id: row.product_id,
-    design_no: row.design_no || '',
+    category_id: row.category_id || null,
+    unit_id: row.unit_id || null,
     gsm: row.gsm == null ? null : Number(row.gsm),
-    width_inches:
-      row.width_inches == null
-        ? null
-        : Number(row.width_inches),
+    width_inches: row.width_inches == null ? null : Number(row.width_inches),
     composition: row.composition || '',
-    stitch_length:
-      row.stitch_length == null
-        ? null
-        : Number(row.stitch_length),
-    gauge: row.gauge || '',
-    construction: row.construction || '',
-    unit_id: row.unit_id,
+    description: row.description || '',
     is_active: row.is_active === true,
     created_at: row.created_at,
     updated_at: row.updated_at,
   };
 }
 
-// ============================================================
-// GET ALL FABRICS
-// GET /api/fabrics
-// ============================================================
-
 router.get('/', async (req, res) => {
   try {
-    const result = await pool.query(`
+    const result = await pool.query(
+      `
       SELECT
-        id,
-        company_id,
-        code,
-        name,
-        product_id,
-        design_no,
-        gsm,
-        width_inches,
-        composition,
-        stitch_length,
-        gauge,
-        construction,
-        unit_id,
-        is_active,
-        created_at,
-        updated_at
+        id, company_id, code, name, category_id, unit_id,
+        gsm, width_inches, composition, description,
+        is_active, created_at, updated_at
       FROM master.fabrics
       WHERE company_id = $1
         AND is_active = TRUE
       ORDER BY name ASC
-    `, [COMPANY_ID]);
-
-    return res.status(200).json(
-      result.rows.map(mapFabric)
+      `,
+      [COMPANY_ID]
     );
+
+    return res.status(200).json(result.rows.map(mapFabric));
   } catch (error) {
     console.error('Get fabrics failed:', error);
-
     return res.status(500).json({
       success: false,
       error: 'Failed to load fabrics',
@@ -87,32 +51,14 @@ router.get('/', async (req, res) => {
   }
 });
 
-// ============================================================
-// GET ONE FABRIC
-// GET /api/fabrics/:id
-// ============================================================
-
 router.get('/:id', async (req, res) => {
   try {
     const result = await pool.query(
       `
       SELECT
-        id,
-        company_id,
-        code,
-        name,
-        product_id,
-        design_no,
-        gsm,
-        width_inches,
-        composition,
-        stitch_length,
-        gauge,
-        construction,
-        unit_id,
-        is_active,
-        created_at,
-        updated_at
+        id, company_id, code, name, category_id, unit_id,
+        gsm, width_inches, composition, description,
+        is_active, created_at, updated_at
       FROM master.fabrics
       WHERE id = $1
         AND company_id = $2
@@ -128,12 +74,9 @@ router.get('/:id', async (req, res) => {
       });
     }
 
-    return res.status(200).json(
-      mapFabric(result.rows[0])
-    );
+    return res.status(200).json(mapFabric(result.rows[0]));
   } catch (error) {
     console.error('Get fabric failed:', error);
-
     return res.status(500).json({
       success: false,
       error: 'Failed to load fabric',
@@ -142,25 +85,17 @@ router.get('/:id', async (req, res) => {
   }
 });
 
-// ============================================================
-// CREATE FABRIC
-// POST /api/fabrics
-// ============================================================
-
 router.post('/', async (req, res) => {
   try {
     const {
       code,
       name,
-      product_id,
-      design_no,
+      category_id,
+      unit_id,
       gsm,
       width_inches,
       composition,
-      stitch_length,
-      gauge,
-      construction,
-      unit_id,
+      description,
     } = req.body;
 
     if (!code || !code.toString().trim()) {
@@ -180,72 +115,25 @@ router.post('/', async (req, res) => {
     const result = await pool.query(
       `
       INSERT INTO master.fabrics (
-        company_id,
-        code,
-        name,
-        product_id,
-        design_no,
-        gsm,
-        width_inches,
-        composition,
-        stitch_length,
-        gauge,
-        construction,
-        unit_id,
-        is_active
+        company_id, code, name, category_id, unit_id,
+        gsm, width_inches, composition, description, is_active
       )
-      VALUES (
-        $1,
-        $2,
-        $3,
-        $4,
-        $5,
-        $6,
-        $7,
-        $8,
-        $9,
-        $10,
-        $11,
-        $12,
-        TRUE
-      )
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, TRUE)
       RETURNING
-        id,
-        company_id,
-        code,
-        name,
-        product_id,
-        design_no,
-        gsm,
-        width_inches,
-        composition,
-        stitch_length,
-        gauge,
-        construction,
-        unit_id,
-        is_active,
-        created_at,
-        updated_at
+        id, company_id, code, name, category_id, unit_id,
+        gsm, width_inches, composition, description,
+        is_active, created_at, updated_at
       `,
       [
         COMPANY_ID,
         code.toString().trim(),
         name.toString().trim(),
-        product_id || null,
-        design_no || null,
-        gsm === '' || gsm == null
-          ? null
-          : Number(gsm),
-        width_inches === '' || width_inches == null
-          ? null
-          : Number(width_inches),
-        composition || null,
-        stitch_length === '' || stitch_length == null
-          ? null
-          : Number(stitch_length),
-        gauge || null,
-        construction || null,
+        category_id || null,
         unit_id || null,
+        gsm === '' || gsm == null ? null : Number(gsm),
+        width_inches === '' || width_inches == null ? null : Number(width_inches),
+        composition || null,
+        description || null,
       ]
     );
 
@@ -263,6 +151,14 @@ router.post('/', async (req, res) => {
       });
     }
 
+    if (error.code === '23503') {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid category or unit',
+        details: error.detail,
+      });
+    }
+
     return res.status(500).json({
       success: false,
       error: 'Failed to create fabric',
@@ -271,25 +167,17 @@ router.post('/', async (req, res) => {
   }
 });
 
-// ============================================================
-// UPDATE FABRIC
-// PUT /api/fabrics/:id
-// ============================================================
-
 router.put('/:id', async (req, res) => {
   try {
     const {
       code,
       name,
-      product_id,
-      design_no,
+      category_id,
+      unit_id,
       gsm,
       width_inches,
       composition,
-      stitch_length,
-      gauge,
-      construction,
-      unit_id,
+      description,
       is_active,
     } = req.body;
 
@@ -313,55 +201,30 @@ router.put('/:id', async (req, res) => {
       SET
         code = $1,
         name = $2,
-        product_id = $3,
-        design_no = $4,
+        category_id = $3,
+        unit_id = $4,
         gsm = $5,
         width_inches = $6,
         composition = $7,
-        stitch_length = $8,
-        gauge = $9,
-        construction = $10,
-        unit_id = $11,
-        is_active = $12,
+        description = $8,
+        is_active = $9,
         updated_at = NOW()
-      WHERE id = $13
-        AND company_id = $14
+      WHERE id = $10
+        AND company_id = $11
       RETURNING
-        id,
-        company_id,
-        code,
-        name,
-        product_id,
-        design_no,
-        gsm,
-        width_inches,
-        composition,
-        stitch_length,
-        gauge,
-        construction,
-        unit_id,
-        is_active,
-        created_at,
-        updated_at
+        id, company_id, code, name, category_id, unit_id,
+        gsm, width_inches, composition, description,
+        is_active, created_at, updated_at
       `,
       [
         code.toString().trim(),
         name.toString().trim(),
-        product_id || null,
-        design_no || null,
-        gsm === '' || gsm == null
-          ? null
-          : Number(gsm),
-        width_inches === '' || width_inches == null
-          ? null
-          : Number(width_inches),
-        composition || null,
-        stitch_length === '' || stitch_length == null
-          ? null
-          : Number(stitch_length),
-        gauge || null,
-        construction || null,
+        category_id || null,
         unit_id || null,
+        gsm === '' || gsm == null ? null : Number(gsm),
+        width_inches === '' || width_inches == null ? null : Number(width_inches),
+        composition || null,
+        description || null,
         is_active !== false,
         req.params.id,
         COMPANY_ID,
@@ -389,6 +252,14 @@ router.put('/:id', async (req, res) => {
       });
     }
 
+    if (error.code === '23503') {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid category or unit',
+        details: error.detail,
+      });
+    }
+
     return res.status(500).json({
       success: false,
       error: 'Failed to update fabric',
@@ -396,11 +267,6 @@ router.put('/:id', async (req, res) => {
     });
   }
 });
-
-// ============================================================
-// DEACTIVATE FABRIC
-// DELETE /api/fabrics/:id
-// ============================================================
 
 router.delete('/:id', async (req, res) => {
   try {
@@ -430,7 +296,6 @@ router.delete('/:id', async (req, res) => {
     });
   } catch (error) {
     console.error('Deactivate fabric failed:', error);
-
     return res.status(500).json({
       success: false,
       error: 'Failed to deactivate fabric',
