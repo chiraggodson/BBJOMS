@@ -61,7 +61,7 @@ class ApiService {
         .toList();
   }
 
-  Future<Party> getParty(int id) async {
+  Future<Party> getParty(String id) async {
     final uri = Uri.parse('$baseUrl/parties/$id');
 
     final response = await http.get(uri);
@@ -165,7 +165,7 @@ class ApiService {
   }
 
   Future<Party> updateParty({
-    required int id,
+    required String id,
     required String name,
     String? alias,
     String? gstin,
@@ -224,7 +224,7 @@ class ApiService {
     );
   }
 
-  Future<void> deactivateParty(int id) async {
+  Future<void> deactivateParty(String id) async {
     final uri = Uri.parse('$baseUrl/parties/$id');
 
     final response = await http.delete(uri);
@@ -666,7 +666,7 @@ class ApiService {
   // ============================================================
 
   Future<List<String>> createJob({
-    required int partyId,
+    required String partyId,
     required String fabricName,
     required double gsm,
     required double orderQuantity,
@@ -780,7 +780,7 @@ class ApiService {
 
   Future<JobOrder> updateJob({
     required int id,
-    required int partyId,
+    required String partyId,
     required String fabricName,
     required double gsm,
     required double orderQuantity,
@@ -1232,7 +1232,7 @@ Future<void> deactivateFabric(String id) async {
 // ============================================================
 
 class Party {
-  final int id;
+  final String id;
   final String partyCode;
   final String name;
   final String alias;
@@ -1278,7 +1278,7 @@ class Party {
         : const [];
 
     return Party(
-      id: _toInt(json['id']),
+      id: json['id']?.toString() ?? '',
       partyCode: json['party_code']?.toString() ?? '',
       name: json['name']?.toString() ?? '',
       alias: json['alias']?.toString() ?? '',
@@ -1544,7 +1544,7 @@ class JobOrder {
   final String jobNo;
   final int? fabricId;
   final String fabricName;
-  final int? partyId;
+  final String? partyId;
   final String partyName;
   final int? machineId;
   final String machineNo;
@@ -1585,7 +1585,7 @@ class JobOrder {
       fabricId: _toNullableInt(json['fabricId'] ?? json['fabric_id']),
       fabricName:
           (json['fabricName'] ?? json['fabric_name'])?.toString() ?? '',
-      partyId: _toNullableInt(json['partyId'] ?? json['party_id']),
+      partyId: _toNullableString(json['partyId'] ?? json['party_id']),
       partyName:
           (json['partyName'] ?? json['party_name'])?.toString() ?? '',
       machineId: _toNullableInt(json['machineId'] ?? json['machine_id']),
@@ -1856,6 +1856,16 @@ int? _toNullableInt(dynamic value) {
   return int.tryParse(
     value.toString(),
   );
+}
+
+String? _toNullableString(dynamic value) {
+  if (value == null) {
+    return null;
+  }
+
+  final text = value.toString().trim();
+
+  return text.isEmpty ? null : text;
 }
 
 double _toDouble(dynamic value) {

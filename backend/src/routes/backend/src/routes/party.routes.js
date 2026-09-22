@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { pool } = require('../db');
 
-const COMPANY_ID = '63558a5c-3815-4d4f-9f0d-7edfdf5d3f11';
+const COMPANY_ID = '37c8cd03-c8ae-48cd-b8e4-cb3e864f042f';
 
 const ALLOWED_ROLES = [
   'Customer',
