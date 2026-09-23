@@ -667,7 +667,7 @@ class ApiService {
 
   Future<List<String>> createJob({
     required String partyId,
-    required String fabricName,
+    required String fabricId,
     required double gsm,
     required double orderQuantity,
     required List<int> machineIds,
@@ -684,7 +684,7 @@ class ApiService {
 
     final body = <String, dynamic>{
       'party_id': partyId,
-      'fabric_name': fabricName,
+      'fabric_id': fabricId,
       'gsm': gsm,
       'order_quantity': orderQuantity,
       'machine_ids': machineIds,

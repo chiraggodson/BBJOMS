@@ -1948,15 +1948,38 @@ class _NewJobOrderDialogState extends State<_NewJobOrderDialog> {
     });
 
     try {
-      final fabricName = _selectedFabric!.name.trim();
+      debugPrint('CREATE JOB PARTY ID: ${_selectedParty!.id}');
+      debugPrint('CREATE JOB PARTY NAME: ${_selectedParty!.name}');
+      debugPrint('CREATE JOB FABRIC ID: ${_selectedFabric!.id}');
+      final partyId = _selectedParty!.id.trim();
 
-      if (fabricName.isEmpty) {
+          final uuidRegex = RegExp(
+            r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$',
+          );
+
+          if (!uuidRegex.hasMatch(partyId)) {
+            if (mounted) {
+              setState(() {
+                _saving = false;
+              });
+            }
+            _showError(
+              'Selected party has an invalid ID: $partyId. '
+              'Please refresh the party list and try again.',
+            );
+            return;
+          }
+
+      
+      final fabricId = _selectedFabric!.id.trim();
+
+      if (fabricId.isEmpty) {
         if (mounted) {
           setState(() {
             _saving = false;
           });
         }
-        _showError('Selected fabric has no valid name.');
+        _showError('Selected fabric has an invalid ID.');
         return;
       }
 
@@ -1972,8 +1995,8 @@ class _NewJobOrderDialogState extends State<_NewJobOrderDialog> {
       ).toList();
 
       final jobNumbers = await widget.apiService.createJob(
-        partyId: _selectedParty!.id,
-        fabricName: fabricName,
+        partyId: partyId,
+        fabricId: fabricId,
         gsm: gsm,
         orderQuantity: quantity,
         machineIds: _selectedMachineIds.toList(),
