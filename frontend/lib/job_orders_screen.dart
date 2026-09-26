@@ -335,7 +335,7 @@ class _JobOrdersPageState extends State<JobOrdersPage> {
   Future<void> _openJob(JobOrder job) async {
     try {
       final details =
-          await _apiService.getJobDetails(job.id);
+          await _apiService.getJobDetails(job.jobNo);
 
       if (!mounted) return;
 
@@ -363,7 +363,7 @@ class _JobOrdersPageState extends State<JobOrdersPage> {
 
 Future<void> _editJob(JobOrder job) async {
   try {
-    final details = await _apiService.getJobDetails(job.id);
+    final details = await _apiService.getJobDetails(job.jobNo);
 
     if (!mounted) return;
 

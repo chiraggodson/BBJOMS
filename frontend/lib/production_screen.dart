@@ -58,7 +58,7 @@ class _ProductionPageState extends State<ProductionPage> {
       await Future.wait(
         jobs.map((job) async {
           try {
-            final detail = await _api.getJobDetails(job.id);
+            final detail = await _api.getJobDetails(job.jobNo);
             details[job.id] = detail;
 
             try {

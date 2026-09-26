@@ -844,7 +844,7 @@ class _YarnIssueDialogState extends State<_YarnIssueDialog> {
 
   Future<Set<String>> _requiredYarns(JobOrder job) async {
     try {
-      final details = await widget.api.getJobDetails(job.id);
+      final details = await widget.api.getJobDetails(job.jobNo);
       return details.yarns
           .map((y) => y.yarnId.trim())
           .where((id) => id.isNotEmpty)

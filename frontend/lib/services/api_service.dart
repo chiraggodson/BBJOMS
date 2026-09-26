@@ -619,7 +619,7 @@ class ApiService {
   // JOB DETAILS
   // ============================================================
 
-  Future<JobDetails> getJobDetails(int id) async {
+  Future<JobDetails> getJobDetails(String id) async {
     final response = await http.get(
       Uri.parse('$baseUrl/jobs/$id'),
     );

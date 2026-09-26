@@ -34,7 +34,7 @@ async function getJobById(client, id) {
       WHERE fp.status='POSTED'
       GROUP BY job_order_id
     ) prod ON prod.job_order_id=j.id
-    WHERE j.id=$1 AND j.company_id=$2
+    WHERE (j.id::text=$1 OR j.job_no=$1) AND j.company_id=$2
     GROUP BY j.id,p.name,f.name,f.gsm,prod.produced_quantity
   `, [id, COMPANY_ID]);
   if (!result.rows.length) return null;
@@ -43,7 +43,7 @@ async function getJobById(client, id) {
   const yarns = await client.query(`
     SELECT
       joy.id, joy.job_order_id, joy.yarn_id,
-      COALESCE(y.name,'') AS yarn_name, COALESCE(y.count,'') AS yarn_count,
+      COALESCE(y.name,'') AS yarn_name, COALESCE(y.count::text,'') AS yarn_count,
       joy.requirement_percent, joy.required_kg
     FROM jobwork.job_order_yarns joy
     JOIN master.yarns y ON y.id=joy.yarn_id
@@ -179,9 +179,23 @@ router.post('/',async(req,res)=>{
     for(const m of machines){
       const mid=typeof m==='object'?(m.machine_id??m.id):m;
       if(!mid)continue;
-      const check=await client.query(`SELECT id FROM master.machines WHERE id=$1 AND company_id=$2 AND is_active`,[mid,COMPANY_ID]);
-      if(!check.rows.length)throw new Error(`Machine ${mid} does not exist`);
-      await client.query(`INSERT INTO jobwork.job_order_machines(job_order_id,machine_id,is_primary) VALUES($1,$2,$3) ON CONFLICT DO NOTHING`,[jobId,mid,0]);
+    const check=await client.query(`
+  SELECT id
+  FROM master.machines
+  WHERE company_id=$1
+    AND is_active
+    AND (id::text=$2 OR machine_no=$2)
+  LIMIT 1
+`,[COMPANY_ID,String(mid)]);
+
+if(!check.rows.length)throw new Error(`Machine ${mid} does not exist`);
+
+await client.query(
+  `INSERT INTO jobwork.job_order_machines(job_order_id,machine_id,is_primary)
+   VALUES($1,$2,$3) ON CONFLICT DO NOTHING`,
+  [jobId,check.rows[0].id,0]
+);  
+      
     }
     for(const y of yarns){
       const yarnId=uuid(y.yarn_id??y.yarnId);
