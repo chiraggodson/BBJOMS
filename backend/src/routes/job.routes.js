@@ -22,11 +22,13 @@ async function getJobById(client, id) {
       j.status, j.notes, j.created_at, j.updated_at,
       COALESCE(prod.produced_quantity,0) AS produced_quantity,
       GREATEST(j.order_quantity_kg-COALESCE(prod.produced_quantity,0),0) AS remaining_quantity,
-      COALESCE(ARRAY_AGG(DISTINCT jom.machine_id) FILTER (WHERE jom.machine_id IS NOT NULL), ARRAY[]::uuid[]) AS machine_ids
+      COALESCE(ARRAY_AGG(DISTINCT jom.machine_id) FILTER (WHERE jom.machine_id IS NOT NULL), ARRAY[]::uuid[]) AS machine_ids,
+      COALESCE(ARRAY_AGG(DISTINCT m.machine_no) FILTER (WHERE m.machine_no IS NOT NULL), ARRAY[]::text[]) AS machine_numbers
     FROM jobwork.job_orders j
     LEFT JOIN master.parties p ON p.id=j.party_id
     LEFT JOIN master.fabrics f ON f.id=j.fabric_id
     LEFT JOIN jobwork.job_order_machines jom ON jom.job_order_id=j.id
+    LEFT JOIN master.machines m ON m.id=jom.machine_id
     LEFT JOIN (
       SELECT job_order_id, COALESCE(SUM(r.net_weight_kg),0) produced_quantity
       FROM production.fabric_production fp
@@ -63,6 +65,7 @@ async function getJobById(client, id) {
   `, [id]);
 
   const machineIds = (j.machine_ids || []).map(String);
+  const machineNumbers = (j.machine_numbers || []).map(String);
   return {
     id: String(j.id), jobNo:j.job_no, jobDate:j.job_date,
     partyId: j.party_id ? String(j.party_id) : null, partyName:j.party_name,
@@ -70,7 +73,7 @@ async function getJobById(client, id) {
     designNo:j.design_no || '', gsm: j.fabric_gsm == null ? 0 : Number(j.fabric_gsm),
     orderQuantity:Number(j.order_quantity_kg || 0), producedQuantity:Number(j.produced_quantity || 0),
     remainingQuantity:Number(j.remaining_quantity || 0), status:j.status, notes:j.notes || '',
-    machineIds, machineNumbers: machineIds.join(', '),
+    machineIds, machineNumbers: machineNumbers.join(', '),
     yarns:yarns.rows.map(y=>({
       id:String(y.id), yarnId:String(y.yarn_id), jobOrderId:String(y.job_order_id),
       yarnName:y.yarn_name, yarnCount:y.yarn_count, requirementPercent:y.requirement_percent == null ? null : Number(y.requirement_percent),
@@ -96,11 +99,13 @@ router.get('/', async (req,res)=>{
              j.fabric_id,COALESCE(f.name,'') fabric_name,f.gsm,j.order_quantity_kg,j.status,j.design_no,
              COALESCE(prod.produced_quantity,0) produced_quantity,
              GREATEST(j.order_quantity_kg-COALESCE(prod.produced_quantity,0),0) remaining_quantity,
-             COALESCE(ARRAY_AGG(DISTINCT jom.machine_id) FILTER(WHERE jom.machine_id IS NOT NULL),ARRAY[]::uuid[]) machine_ids
+             COALESCE(ARRAY_AGG(DISTINCT jom.machine_id) FILTER(WHERE jom.machine_id IS NOT NULL),ARRAY[]::uuid[]) machine_ids,
+             COALESCE(ARRAY_AGG(DISTINCT m.machine_no) FILTER(WHERE m.machine_no IS NOT NULL),ARRAY[]::text[]) machine_numbers
       FROM jobwork.job_orders j
       LEFT JOIN master.parties p ON p.id=j.party_id
       LEFT JOIN master.fabrics f ON f.id=j.fabric_id
       LEFT JOIN jobwork.job_order_machines jom ON jom.job_order_id=j.id
+      LEFT JOIN master.machines m ON m.id=jom.machine_id
       LEFT JOIN (SELECT fp.job_order_id,COALESCE(SUM(r.net_weight_kg),0) produced_quantity
                  FROM production.fabric_production fp JOIN production.fabric_production_rolls r ON r.production_id=fp.id
                  WHERE fp.status='POSTED' GROUP BY fp.job_order_id) prod ON prod.job_order_id=j.id
@@ -112,7 +117,7 @@ router.get('/', async (req,res)=>{
       fabricId:j.fabric_id?String(j.fabric_id):null,gsm:j.gsm==null?0:Number(j.gsm),
       orderQuantity:Number(j.order_quantity_kg||0),producedQuantity:Number(j.produced_quantity||0),
       remainingQuantity:Number(j.remaining_quantity||0),machineIds:(j.machine_ids||[]).map(String),
-      machineNumbers:(j.machine_ids||[]).map(String).join(', ')}))});
+      machineNumbers:(j.machine_numbers||[]).map(String).join(', ')}))});
   }catch(e){console.error('Get jobs failed:',e);res.status(500).json({success:false,error:e.message||'Failed to load job orders'});}
 });
 
