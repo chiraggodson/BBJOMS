@@ -18,7 +18,7 @@ async function getJobById(client, id) {
       j.id, j.job_no, j.job_date, j.party_id,
       COALESCE(p.name,'') AS party_name,
       j.fabric_id, COALESCE(f.name,'') AS fabric_name,
-      j.design_no, f.gsm AS fabric_gsm, j.order_quantity_kg,
+      j.design_no, j.gsm AS job_gsm, j.order_quantity_kg,
       j.status, j.notes, j.created_at, j.updated_at,
       COALESCE(prod.produced_quantity,0) AS produced_quantity,
       GREATEST(j.order_quantity_kg-COALESCE(prod.produced_quantity,0),0) AS remaining_quantity,
@@ -102,10 +102,10 @@ async function getJobById(client, id) {
     id: String(j.id), jobNo:j.job_no, jobDate:j.job_date,
     partyId: j.party_id ? String(j.party_id) : null, partyName:j.party_name,
     fabricId:j.fabric_id ? String(j.fabric_id) : null, fabricName:j.fabric_name,
-    designNo:j.design_no || '', gsm: j.fabric_gsm == null ? 0 : Number(j.fabric_gsm),
+    designNo:j.design_no || '', gsm: j.job_gsm == null ? 0 : Number(j.job_gsm),
     orderQuantity:Number(j.order_quantity_kg || 0), producedQuantity:Number(j.produced_quantity || 0),
     remainingQuantity:Number(j.remaining_quantity || 0), status:j.status, notes:j.notes || '',
-    machineIds, machineNumbers: machineNumbers.join(', '),
+    machineIds, machineNumbers: machineNumbers.join(', '), machines: machineNumbers,
     yarns:yarns.map(y=>({
       id:String(y.id), yarnId:String(y.yarn_id), jobOrderId:String(y.job_order_id),
       yarnName:y.yarn_name, yarnCount:y.yarn_count, requirementPercent:y.requirement_percent == null ? null : Number(y.requirement_percent),
@@ -129,7 +129,7 @@ router.get('/', async (req,res)=>{
     const result=await pool.query(`
       SELECT
         j.id,j.job_no,j.job_date,j.party_id,COALESCE(p.name,'') party_name,
-        j.fabric_id,COALESCE(f.name,'') fabric_name,f.gsm,j.order_quantity_kg,j.status,j.design_no,
+        j.fabric_id,COALESCE(f.name,'') fabric_name,j.gsm,j.order_quantity_kg,j.status,j.design_no,
         COALESCE(prod.produced_quantity,0) produced_quantity,
         GREATEST(j.order_quantity_kg-COALESCE(prod.produced_quantity,0),0) remaining_quantity,
         COALESCE((
@@ -207,7 +207,8 @@ router.post('/',async(req,res)=>{
   const b=req.body||{};
   const partyId=uuid(b.party_id??b.partyId), fabricId=uuid(b.fabric_id??b.fabricId);
   const qty=toNumber(b.order_quantity??b.orderQuantity);
-  if(!partyId||!fabricId||qty<=0)return res.status(400).json({success:false,error:'Party, fabric and order quantity are required'});
+  const gsm=toNumber(b.gsm);
+  if(!partyId||!fabricId||qty<=0||gsm<=0)return res.status(400).json({success:false,error:'Party, fabric, GSM and order quantity are required'});
   const machines=Array.isArray(b.machines??b.machine_ids??b.machineIds)?(b.machines??b.machine_ids??b.machineIds):[];
   const yarns=Array.isArray(b.yarns)?b.yarns:[];
   const client=await pool.connect();
@@ -222,9 +223,9 @@ router.post('/',async(req,res)=>{
     const number=await client.query(`SELECT COALESCE(MAX(CAST(NULLIF(SUBSTRING(job_no FROM '^BBJO-([0-9]+)$'),'') AS INTEGER)),0)+1 next_no FROM jobwork.job_orders WHERE company_id=$1`,[COMPANY_ID]);
     const jobNo=`BBJO-${String(Number(number.rows[0].next_no)).padStart(5,'0')}`;
     const inserted=await client.query(`
-      INSERT INTO jobwork.job_orders(company_id,financial_year_id,job_no,job_date,party_id,fabric_id,design_no,order_quantity_kg,status,notes)
-      VALUES($1,$2,$3,COALESCE($4::date,CURRENT_DATE),$5,$6,$7,$8,$9,$10) RETURNING id
-    `,[COMPANY_ID,fy.rows[0].id,jobNo,b.job_date??b.jobDate??null,partyId,fabricId,cleanString(b.design_no??b.designNo)||null,qty,cleanString(b.status).toUpperCase()||'OPEN',cleanString(b.notes)||null]);
+      INSERT INTO jobwork.job_orders(company_id,financial_year_id,job_no,job_date,party_id,fabric_id,design_no,gsm,order_quantity_kg,status,notes)
+      VALUES($1,$2,$3,COALESCE($4::date,CURRENT_DATE),$5,$6,$7,$8,$9,$10,$11) RETURNING id
+    `,[COMPANY_ID,fy.rows[0].id,jobNo,b.job_date??b.jobDate??null,partyId,fabricId,cleanString(b.design_no??b.designNo)||null,gsm,qty,cleanString(b.status).toUpperCase()||'OPEN',cleanString(b.notes)||null]);
     const jobId=inserted.rows[0].id;
     for(const m of machines){
       const mid=typeof m==='object'?(m.machine_id??m.id):m;
@@ -273,15 +274,21 @@ router.put('/:id',async(req,res)=>{
     await client.query(`
       UPDATE jobwork.job_orders SET job_date=COALESCE($1::date,job_date),party_id=COALESCE($2,party_id),
       fabric_id=COALESCE($3,fabric_id),design_no=COALESCE(NULLIF($4,''),design_no),
-      order_quantity_kg=COALESCE($5,order_quantity_kg),status=COALESCE(NULLIF($6,''),status),
-      notes=COALESCE(NULLIF($7,''),notes),updated_at=NOW() WHERE id=$8 AND company_id=$9
+      gsm=COALESCE($5,gsm),order_quantity_kg=COALESCE($6,order_quantity_kg),status=COALESCE(NULLIF($7,''),status),
+      notes=COALESCE(NULLIF($8,''),notes),updated_at=NOW() WHERE id=$9 AND company_id=$10
     `,[b.job_date??b.jobDate??null,b.party_id??b.partyId??null,b.fabric_id??b.fabricId??null,
-      cleanString(b.design_no??b.designNo),toNumber(b.order_quantity??b.orderQuantity)||null,
+      cleanString(b.design_no??b.designNo),toNumber(b.gsm)||null,toNumber(b.order_quantity??b.orderQuantity)||null,
       cleanString(b.status).toUpperCase(),cleanString(b.notes),id,COMPANY_ID]);
     if(b.machines!==undefined||b.machine_ids!==undefined||b.machineIds!==undefined){
       const list=b.machines??b.machine_ids??b.machineIds??[];
       await client.query(`DELETE FROM jobwork.job_order_machines WHERE job_order_id=$1`,[id]);
-      for(const m of list){const mid=typeof m==='object'?(m.machine_id??m.id):m; if(mid)await client.query(`INSERT INTO jobwork.job_order_machines(job_order_id,machine_id,is_primary) VALUES($1,$2,false) ON CONFLICT DO NOTHING`,[id,mid]);}
+      for(const m of list){
+        const mid=typeof m==='object'?(m.machine_id??m.id):m;
+        if(!mid)continue;
+        const check=await client.query(`SELECT id FROM master.machines WHERE company_id=$1 AND is_active AND (id::text=$2 OR machine_no=$2) LIMIT 1`,[COMPANY_ID,String(mid)]);
+        if(!check.rows.length)throw new Error(`Machine ${mid} does not exist`);
+        await client.query(`INSERT INTO jobwork.job_order_machines(job_order_id,machine_id,is_primary) VALUES($1,$2,false) ON CONFLICT DO NOTHING`,[id,check.rows[0].id]);
+      }
     }
     if(b.yarns!==undefined){
       await client.query(`DELETE FROM jobwork.job_order_yarns WHERE job_order_id=$1`,[id]);
