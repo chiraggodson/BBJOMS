@@ -1,12 +1,491 @@
+
 import 'package:flutter/material.dart';
+import 'app_theme.dart';
 import 'services/yarn_receipt_service.dart';
 
-const _bg = Color(0xFF0B1117);
-const _panel = Color(0xFF111A22);
-const _panel2 = Color(0xFF0F171E);
-const _border = Color(0xFF1E2A34);
-const _muted = Color(0xFF84919D);
-const _teal = Color(0xFF00BFA6);
+const _panel = BBTheme.panel;
+const _panel2 = BBTheme.black3;
+const _border = BBTheme.border;
+const _muted = BBTheme.muted;
+const _accent = BBTheme.red;
+
+class InventoryPage extends StatefulWidget {
+  const InventoryPage({super.key});
+
+  @override
+  State<InventoryPage> createState() => _InventoryPageState();
+}
+
+class _InventoryPageState extends State<InventoryPage> {
+  final YarnReceiptApi _api = YarnReceiptApi();
+
+  List<Map<String, dynamic>> _stock = [];
+  List<Map<String, dynamic>> _movements = [];
+  bool _loading = true;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+
+    try {
+      final results = await Future.wait([
+        _api.getYarnStock(),
+        _api.getYarnMovements(limit: 20),
+      ]);
+
+      if (!mounted) return;
+
+      setState(() {
+        _stock = results[0] as List<Map<String, dynamic>>;
+        _movements = results[1] as List<Map<String, dynamic>>;
+        _loading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _loading = false;
+        _error = e.toString().replaceFirst('Exception: ', '');
+      });
+    }
+  }
+
+  double _number(dynamic value) {
+    if (value is num) return value.toDouble();
+    return double.tryParse('$value'.replaceAll(',', '').trim()) ?? 0;
+  }
+
+  double _stockQty(Map<String, dynamic> row) {
+    for (final key in [
+      'balance',
+      'balance_qty',
+      'available_qty',
+      'available_quantity',
+      'quantity',
+      'qty',
+      'closing_qty',
+      'stock_qty',
+      'current_balance',
+    ]) {
+      if (row.containsKey(key) && row[key] != null) {
+        return _number(row[key]);
+      }
+    }
+    return 0;
+  }
+
+  String _stockName(Map<String, dynamic> row) {
+    for (final key in [
+      'yarn_name',
+      'yarn',
+      'name',
+      'yarn_description',
+      'yarn_master_name',
+    ]) {
+      final value = '${row[key] ?? ''}'.trim();
+      if (value.isNotEmpty && value != 'null') return value;
+    }
+    return 'Yarn';
+  }
+
+  String _stockSecondary(Map<String, dynamic> row) {
+    final parts = <String>[];
+
+    for (final key in ['yarn_count', 'count', 'yarn_type', 'type']) {
+      final value = '${row[key] ?? ''}'.trim();
+      if (value.isNotEmpty && value != 'null') parts.add(value);
+    }
+
+    for (final key in ['color_name', 'color', 'colour_name']) {
+      final value = '${row[key] ?? ''}'.trim();
+      if (value.isNotEmpty && value != 'null') parts.add(value);
+    }
+
+    for (final key in ['location_name', 'location']) {
+      final value = '${row[key] ?? ''}'.trim();
+      if (value.isNotEmpty && value != 'null') {
+        parts.add(value);
+        break;
+      }
+    }
+
+    return parts.join(' • ');
+  }
+
+  String _formatKg(double value) {
+    if (value.abs() >= 1000) {
+      return '${value.toStringAsFixed(value % 1 == 0 ? 0 : 1)} kg';
+    }
+    return '${value.toStringAsFixed(value % 1 == 0 ? 0 : 2)} kg';
+  }
+
+  bool _isToday(dynamic value) {
+    final text = '$value';
+    if (text.isEmpty || text == 'null') return false;
+    final parsed = DateTime.tryParse(text);
+    if (parsed == null) return false;
+
+    final now = DateTime.now();
+    return parsed.year == now.year &&
+        parsed.month == now.month &&
+        parsed.day == now.day;
+  }
+
+  double _todayMovementTotal(bool incoming) {
+    double total = 0;
+
+    for (final row in _movements) {
+      final type = '${row['movement_type'] ?? row['type'] ?? row['transaction_type'] ?? ''}'
+          .toLowerCase();
+
+      final incomingType = type.contains('receipt') ||
+          type.contains('receive') ||
+          type.contains('inward') ||
+          type.contains('received');
+
+      final outgoingType = type.contains('issue') ||
+          type.contains('issued') ||
+          type.contains('outward') ||
+          type.contains('return');
+
+      final matches = incoming ? incomingType : outgoingType;
+      if (!matches) continue;
+
+      final date = row['movement_date'] ??
+          row['transaction_date'] ??
+          row['date'] ??
+          row['created_at'];
+
+      if (_isToday(date)) {
+        for (final key in [
+          'quantity',
+          'qty',
+          'weight',
+          'quantity_kg',
+          'weight_kg',
+        ]) {
+          if (row[key] != null) {
+            total += _number(row[key]);
+            break;
+          }
+        }
+      }
+    }
+
+    return total;
+  }
+
+  Future<void> _receiveYarn() async {
+    final posted = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => const _ReceiveYarnDialog(),
+    );
+
+    if (posted == true) {
+      await _load();
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final totalStock =
+        _stock.fold<double>(0, (sum, row) => sum + _stockQty(row));
+    final receiptsToday = _todayMovementTotal(true);
+    final issuesToday = _todayMovementTotal(false);
+
+    return RefreshIndicator(
+      onRefresh: _load,
+      child: SingleChildScrollView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.fromLTRB(26, 24, 26, 34),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Inventory',
+                        style: TextStyle(
+                          fontSize: 32,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                      SizedBox(height: 5),
+                      Text(
+                        'Live yarn stock and stock movement',
+                        style: TextStyle(color: _muted, fontSize: 14),
+                      ),
+                    ],
+                  ),
+                ),
+                IconButton(
+                  tooltip: 'Refresh',
+                  onPressed: _loading ? null : _load,
+                  icon: const Icon(Icons.refresh),
+                ),
+                const SizedBox(width: 8),
+                FilledButton.icon(
+                  onPressed: _loading ? null : _receiveYarn,
+                  icon: const Icon(Icons.south_west, size: 18),
+                  label: const Text('Receive Yarn'),
+                  style: FilledButton.styleFrom(
+                    backgroundColor: _accent,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 18,
+                      vertical: 13,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 24),
+            if (_error != null) _ErrorBanner(message: _error!),
+            if (_error != null) const SizedBox(height: 16),
+            LayoutBuilder(
+              builder: (_, constraints) {
+                final stats = [
+                  _Stat(
+                    title: 'Yarn Stock',
+                    value: _loading ? '...' : _formatKg(totalStock),
+                    icon: Icons.all_inclusive,
+                  ),
+                  _Stat(
+                    title: 'Yarn Lots',
+                    value: _loading ? '...' : '${_stock.length}',
+                    icon: Icons.inventory_2_outlined,
+                  ),
+                  _Stat(
+                    title: 'Receipts Today',
+                    value: _loading ? '...' : _formatKg(receiptsToday),
+                    icon: Icons.south_west,
+                  ),
+                  _Stat(
+                    title: 'Issues Today',
+                    value: _loading ? '...' : _formatKg(issuesToday),
+                    icon: Icons.north_east,
+                  ),
+                ];
+
+                if (constraints.maxWidth < 760) {
+                  return Wrap(
+                    spacing: 12,
+                    runSpacing: 12,
+                    children: stats,
+                  );
+                }
+
+                return Row(
+                  children: [
+                    for (var i = 0; i < stats.length; i++) ...[
+                      Expanded(child: stats[i]),
+                      if (i != stats.length - 1) const SizedBox(width: 12),
+                    ],
+                  ],
+                );
+              },
+            ),
+            const SizedBox(height: 20),
+            _Card(
+              title: 'Live Yarn Stock',
+              action: '${_stock.length} lots',
+              child: _loading
+                  ? const _LoadingBox()
+                  : _stock.isEmpty
+                      ? const _EmptyBox(
+                          icon: Icons.inventory_2_outlined,
+                          text: 'No yarn stock available.',
+                        )
+                      : Column(
+                          children: [
+                            for (final row in _stock) _stockRow(row),
+                          ],
+                        ),
+            ),
+            const SizedBox(height: 20),
+            _Card(
+              title: 'Recent Stock Movements',
+              action: '${_movements.length} records',
+              child: _loading
+                  ? const _LoadingBox()
+                  : _movements.isEmpty
+                      ? const _EmptyBox(
+                          icon: Icons.swap_vert,
+                          text: 'No stock movements found.',
+                        )
+                      : Column(
+                          children: [
+                            for (final row in _movements) _movementRow(row),
+                          ],
+                        ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _stockRow(Map<String, dynamic> row) {
+    final qty = _stockQty(row);
+    final secondary = _stockSecondary(row);
+
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 13),
+      decoration: const BoxDecoration(
+        border: Border(bottom: BorderSide(color: _border)),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 36,
+            height: 36,
+            decoration: BoxDecoration(
+              color: _accent.withValues(alpha: .10),
+              borderRadius: BorderRadius.circular(5),
+            ),
+            child: const Icon(
+              Icons.inventory_2_outlined,
+              color: _accent,
+              size: 18,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  _stockName(row),
+                  style: const TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                if (secondary.isNotEmpty)
+                  Text(
+                    secondary,
+                    style: const TextStyle(
+                      color: _muted,
+                      fontSize: 11,
+                    ),
+                  ),
+              ],
+            ),
+          ),
+          Text(
+            _formatKg(qty),
+            style: const TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+          const SizedBox(width: 12),
+          _Status(qty > 0 ? 'Available' : 'Empty'),
+        ],
+      ),
+    );
+  }
+
+  Widget _movementRow(Map<String, dynamic> row) {
+    final type = '${row['movement_type'] ?? row['type'] ?? row['transaction_type'] ?? 'Stock Movement'}';
+    final lower = type.toLowerCase();
+
+    final incoming = lower.contains('receipt') ||
+        lower.contains('receive') ||
+        lower.contains('inward') ||
+        lower.contains('received');
+
+    final outgoing = lower.contains('issue') ||
+        lower.contains('issued') ||
+        lower.contains('outward');
+
+    final icon = incoming
+        ? Icons.south_west
+        : outgoing
+            ? Icons.north_east
+            : Icons.swap_vert;
+
+    final title = incoming
+        ? 'Yarn Received'
+        : outgoing
+            ? 'Yarn Issued'
+            : type;
+
+    final party = '${row['party_name'] ?? row['customer_name'] ?? row['party'] ?? ''}'.trim();
+    final reference = '${row['reference_no'] ?? row['receipt_no'] ?? row['job_no'] ?? row['document_no'] ?? ''}'.trim();
+    final yarn = '${row['yarn_name'] ?? row['yarn'] ?? ''}'.trim();
+
+    final details = [
+      if (party.isNotEmpty && party != 'null') party,
+      if (reference.isNotEmpty && reference != 'null') reference,
+      if (yarn.isNotEmpty && yarn != 'null') yarn,
+    ].join(' • ');
+
+    double qty = 0;
+    for (final key in ['quantity', 'qty', 'weight', 'quantity_kg', 'weight_kg']) {
+      if (row[key] != null) {
+        qty = _number(row[key]);
+        break;
+      }
+    }
+
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 12),
+      decoration: const BoxDecoration(
+        border: Border(bottom: BorderSide(color: _border)),
+      ),
+      child: Row(
+        children: [
+          Icon(icon, color: _accent, size: 18),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: const TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                if (details.isNotEmpty)
+                  Text(
+                    details,
+                    style: const TextStyle(
+                      color: _muted,
+                      fontSize: 11,
+                    ),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+              ],
+            ),
+          ),
+          Text(
+            _formatKg(qty),
+            style: const TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
 
 class _Card extends StatelessWidget {
   final String title;
@@ -20,42 +499,44 @@ class _Card extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) => Container(
-        padding: const EdgeInsets.all(20),
-        decoration: BoxDecoration(
-          color: _panel,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: _border),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(17),
+      decoration: BoxDecoration(
+        color: _panel,
+        borderRadius: BorderRadius.circular(7),
+        border: Border.all(color: _border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Text(
+                title,
+                style: const TextStyle(
+                  fontSize: 17,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+              const Spacer(),
+              if (action != null)
                 Text(
-                  title,
+                  action!,
                   style: const TextStyle(
-                    fontSize: 15,
-                    fontWeight: FontWeight.w600,
+                    color: _accent,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w800,
                   ),
                 ),
-                const Spacer(),
-                if (action != null)
-                  Text(
-                    action!,
-                    style: const TextStyle(
-                      color: _teal,
-                      fontSize: 11,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-              ],
-            ),
-            const SizedBox(height: 14),
-            child,
-          ],
-        ),
-      );
+            ],
+          ),
+          const SizedBox(height: 14),
+          child,
+        ],
+      ),
+    );
+  }
 }
 
 class _Stat extends StatelessWidget {
@@ -63,45 +544,55 @@ class _Stat extends StatelessWidget {
   final String value;
   final IconData icon;
 
-  const _Stat(this.title, this.value, this.icon);
+  const _Stat({
+    required this.title,
+    required this.value,
+    required this.icon,
+  });
 
   @override
-  Widget build(BuildContext context) => Container(
-        padding: const EdgeInsets.all(18),
-        decoration: BoxDecoration(
-          color: _panel,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: _border),
-        ),
-        child: Row(
-          children: [
-            Container(
-              width: 42,
-              height: 42,
-              decoration: BoxDecoration(
-                color: _teal.withValues(alpha: .12),
-                borderRadius: BorderRadius.circular(10),
+  Widget build(BuildContext context) {
+    return Container(
+      constraints: const BoxConstraints(minWidth: 190),
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: _panel,
+        borderRadius: BorderRadius.circular(7),
+        border: Border.all(color: _border),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 42,
+            height: 42,
+            decoration: BoxDecoration(
+              color: _accent.withValues(alpha: .10),
+              borderRadius: BorderRadius.circular(5),
+            ),
+            child: Icon(icon, color: _accent, size: 21),
+          ),
+          const SizedBox(width: 12),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                title,
+                style: const TextStyle(color: _muted, fontSize: 11),
               ),
-              child: Icon(icon, color: _teal, size: 21),
-            ),
-            const SizedBox(width: 12),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(title, style: const TextStyle(color: _muted, fontSize: 11)),
-                const SizedBox(height: 3),
-                Text(
-                  value,
-                  style: const TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.w700,
-                  ),
+              const SizedBox(height: 3),
+              Text(
+                value,
+                style: const TextStyle(
+                  fontSize: 24,
+                  fontWeight: FontWeight.w900,
                 ),
-              ],
-            ),
-          ],
-        ),
-      );
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 class _Status extends StatelessWidget {
@@ -111,355 +602,106 @@ class _Status extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    Color c = _muted;
-    if (text == 'Running' || text == 'Open' || text == 'Available') {
-      c = const Color(0xFF2DD4BF);
-    }
-    if (text == 'Yarn Needed' || text == 'Low Stock') {
-      c = const Color(0xFFF87171);
-    }
-    if (text == 'Paused' || text == 'Pending') {
-      c = const Color(0xFFFBBF24);
-    }
-    if (text == 'Closed' || text == 'Complete') {
-      c = const Color(0xFFA78BFA);
-    }
+    final color = text == 'Available'
+        ? const Color(0xFF2DD4BF)
+        : text == 'Empty'
+            ? const Color(0xFFF87171)
+            : _muted;
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
-        color: c.withValues(alpha: .10),
-        borderRadius: BorderRadius.circular(20),
+        color: color.withValues(alpha: .10),
+        borderRadius: BorderRadius.circular(4),
       ),
       child: Text(
         text,
         style: TextStyle(
-          color: c,
+          color: color,
           fontSize: 10,
-          fontWeight: FontWeight.w600,
+          fontWeight: FontWeight.w900,
         ),
       ),
     );
   }
 }
 
-Widget _search(String hint) => TextField(
-      decoration: InputDecoration(
-        hintText: hint,
-        prefixIcon: const Icon(Icons.search, size: 20),
-        filled: true,
-        fillColor: _panel2,
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(9),
-          borderSide: const BorderSide(color: Color(0xFF25313B)),
-        ),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(9),
-          borderSide: const BorderSide(color: Color(0xFF25313B)),
-        ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(9),
-          borderSide: const BorderSide(color: _teal),
-        ),
-      ),
-    );
-
-Widget _primary(
-  String label,
-  IconData icon,
-  VoidCallback onPressed,
-) =>
-    FilledButton.icon(
-      onPressed: onPressed,
-      icon: Icon(icon, size: 18),
-      label: Text(label),
-      style: FilledButton.styleFrom(
-        backgroundColor: _teal,
-        foregroundColor: Colors.white,
-        padding: const EdgeInsets.symmetric(
-          horizontal: 18,
-          vertical: 14,
-        ),
-      ),
-    );
-
-class InventoryPage extends StatelessWidget {
-  const InventoryPage({super.key});
-
-  final items = const [
-    ('Finished Fabric', 'Single Jersey 180 GSM', '2,840 kg', 'Good'),
-    ('Finished Fabric', 'Interlock 220 GSM', '1,920 kg', 'Good'),
-    ('Yarn', 'Polyester 75D', '1,842 kg', 'Available'),
-    ('Yarn', 'Cotton 30s', '932 kg', 'Available'),
-    ('Yarn', 'Spandex 40D', '238 kg', 'Low Stock'),
-  ];
-
-  Future<void> _openReceiveYarn(BuildContext context) async {
-    final posted = await showDialog<bool>(
-      context: context,
-      barrierDismissible: false,
-      builder: (_) => const _ReceiveYarnDialog(),
-    );
-
-    if (posted == true && context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Yarn receipt posted successfully.'),
-        ),
-      );
-    }
-  }
+class _LoadingBox extends StatelessWidget {
+  const _LoadingBox();
 
   @override
-  Widget build(BuildContext context) => SingleChildScrollView(
-        padding: const EdgeInsets.all(28),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                const Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Inventory',
-                        style: TextStyle(
-                          fontSize: 28,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                      SizedBox(height: 5),
-                      Text(
-                        'Yarn, fabric and stock movement overview',
-                        style: TextStyle(
-                          color: _muted,
-                          fontSize: 13,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                _primary(
-                  'Receive Yarn',
-                  Icons.south_west,
-                  () => _openReceiveYarn(context),
-                ),
-                const SizedBox(width: 10),
-                _primary(
-                  'Stock Adjustment',
-                  Icons.tune,
-                  () {},
-                ),
-              ],
-            ),
-            const SizedBox(height: 24),
-            LayoutBuilder(
-              builder: (_, c) => c.maxWidth < 760
-                  ? const Wrap(
-                      spacing: 12,
-                      runSpacing: 12,
-                      children: [
-                        _Stat('Yarn Stock', '5,480 kg', Icons.all_inclusive),
-                        _Stat('Fabric Stock', '4,760 kg', Icons.layers_outlined),
-                        _Stat('Receipts Today', '730 kg', Icons.south_west),
-                        _Stat('Issues Today', '410 kg', Icons.north_east),
-                      ],
-                    )
-                  : const Row(
-                      children: [
-                        Expanded(
-                          child: _Stat(
-                            'Yarn Stock',
-                            '5,480 kg',
-                            Icons.all_inclusive,
-                          ),
-                        ),
-                        SizedBox(width: 12),
-                        Expanded(
-                          child: _Stat(
-                            'Fabric Stock',
-                            '4,760 kg',
-                            Icons.layers_outlined,
-                          ),
-                        ),
-                        SizedBox(width: 12),
-                        Expanded(
-                          child: _Stat(
-                            'Receipts Today',
-                            '730 kg',
-                            Icons.south_west,
-                          ),
-                        ),
-                        SizedBox(width: 12),
-                        Expanded(
-                          child: _Stat(
-                            'Issues Today',
-                            '410 kg',
-                            Icons.north_east,
-                          ),
-                        ),
-                      ],
-                    ),
-            ),
-            const SizedBox(height: 20),
-            _Card(
-              title: 'Stock Overview',
-              child: Column(
-                children: [
-                  _search('Search item or material...'),
-                  const SizedBox(height: 14),
-                  ...items.map(
-                    (i) => Container(
-                      padding: const EdgeInsets.symmetric(vertical: 14),
-                      decoration: const BoxDecoration(
-                        border: Border(
-                          bottom: BorderSide(
-                            color: Color(0xFF1D2933),
-                          ),
-                        ),
-                      ),
-                      child: Row(
-                        children: [
-                          const CircleAvatar(
-                            radius: 17,
-                            backgroundColor: Color(0xFF153A38),
-                            child: Icon(
-                              Icons.inventory_2_outlined,
-                              color: _teal,
-                              size: 17,
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  i.$1,
-                                  style: const TextStyle(
-                                    fontWeight: FontWeight.w600,
-                                    fontSize: 11,
-                                  ),
-                                ),
-                                Text(
-                                  i.$2,
-                                  style: const TextStyle(
-                                    color: _muted,
-                                    fontSize: 10,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                          SizedBox(
-                            width: 90,
-                            child: Text(
-                              i.$3,
-                              textAlign: TextAlign.right,
-                              style: const TextStyle(
-                                fontWeight: FontWeight.w700,
-                                fontSize: 11,
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: 14),
-                          _Status(i.$4),
-                        ],
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 20),
-            _Card(
-              title: 'Recent Stock Movements',
-              child: Column(
-                children: [
-                  _move(
-                    Icons.south_west,
-                    'Yarn Received',
-                    'A.K. Goyal Hosiery',
-                    '420 kg',
-                  ),
-                  _move(
-                    Icons.north_east,
-                    'Yarn Issued',
-                    'BBJO-00128',
-                    '180 kg',
-                  ),
-                  _move(
-                    Icons.layers_outlined,
-                    'Fabric Produced',
-                    'M-24 / BBJO-00127',
-                    '112 kg',
-                  ),
-                  _move(
-                    Icons.keyboard_return,
-                    'Yarn Returned',
-                    'BBJO-00125',
-                    '24 kg',
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      );
+  Widget build(BuildContext context) {
+    return const SizedBox(
+      height: 120,
+      child: Center(child: CircularProgressIndicator()),
+    );
+  }
+}
 
-  Widget _move(
-    IconData icon,
-    String a,
-    String b,
-    String c,
-  ) =>
-      Container(
-        padding: const EdgeInsets.symmetric(vertical: 12),
-        decoration: const BoxDecoration(
-          border: Border(
-            bottom: BorderSide(color: Color(0xFF1D2933)),
-          ),
-        ),
-        child: Row(
+class _EmptyBox extends StatelessWidget {
+  final IconData icon;
+  final String text;
+
+  const _EmptyBox({
+    required this.icon,
+    required this.text,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: 110,
+      child: Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, color: _teal, size: 18),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    a,
-                    style: const TextStyle(
-                      fontSize: 11,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                  Text(
-                    b,
-                    style: const TextStyle(
-                      color: _muted,
-                      fontSize: 10,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            Text(
-              c,
-              style: const TextStyle(
-                fontSize: 11,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
+            Icon(icon, color: _muted, size: 26),
+            const SizedBox(height: 8),
+            Text(text, style: const TextStyle(color: _muted)),
           ],
         ),
-      );
+      ),
+    );
+  }
+}
+
+class _ErrorBanner extends StatelessWidget {
+  final String message;
+
+  const _ErrorBanner({required this.message});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: const Color(0xFF3A171A),
+        borderRadius: BorderRadius.circular(5),
+        border: Border.all(color: const Color(0xFF7F1D1D)),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.error_outline, color: Color(0xFFF87171)),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              message,
+              style: const TextStyle(color: Colors.white),
+            ),
+          ),
+          TextButton(
+            onPressed: () {},
+            child: const Text(''),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 /* ============================================================
-   RECEIVE YARN - INLINE INVENTORY FORM
+   RECEIVE YARN
    ============================================================ */
 
 class _ReceiptLine {
@@ -486,7 +728,7 @@ class _ReceiveYarnDialog extends StatefulWidget {
 }
 
 class _ReceiveYarnDialogState extends State<_ReceiveYarnDialog> {
-  final _api = YarnReceiptApi();
+  final YarnReceiptApi _api = YarnReceiptApi();
 
   final _date = TextEditingController(
     text: DateTime.now().toIso8601String().substring(0, 10),
@@ -496,13 +738,13 @@ class _ReceiveYarnDialogState extends State<_ReceiveYarnDialog> {
   final _notes = TextEditingController();
 
   List<YarnReceiptCompany> _companies = [];
-  List<YarnReceiptSupplier> _suppliers = [];
+  List<YarnReceiptParty> _parties = [];
   List<YarnReceiptColor> _colors = [];
   List<YarnReceiptLocation> _locations = [];
   List<Map<String, dynamic>> _yarns = [];
 
   YarnReceiptCompany? _company;
-  YarnReceiptSupplier? _supplier;
+  YarnReceiptParty? _party;
   YarnReceiptLocation? _location;
 
   bool _loading = true;
@@ -535,7 +777,7 @@ class _ReceiveYarnDialogState extends State<_ReceiveYarnDialog> {
     try {
       final results = await Future.wait([
         _api.getCompanies(),
-        _api.getSuppliers(),
+        _api.getParties(),
         _api.getColors(),
         _api.getYarns(),
       ]);
@@ -543,7 +785,7 @@ class _ReceiveYarnDialogState extends State<_ReceiveYarnDialog> {
       if (!mounted) return;
 
       final companies = results[0] as List<YarnReceiptCompany>;
-      final suppliers = results[1] as List<YarnReceiptSupplier>;
+      final parties = results[1] as List<YarnReceiptParty>;
       final colors = results[2] as List<YarnReceiptColor>;
       final yarns = results[3] as List<Map<String, dynamic>>;
 
@@ -554,39 +796,38 @@ class _ReceiveYarnDialogState extends State<_ReceiveYarnDialog> {
 
       List<YarnReceiptLocation> locations = [];
       if (selectedCompany != null) {
-        locations = await _api.getLocations(companyId: selectedCompany.id);
+        locations = await _api.getLocations(
+          companyId: selectedCompany.id,
+        );
       }
 
       if (!mounted) return;
 
       setState(() {
         _companies = companies;
-        _supplier = null;
-        _company = selectedCompany;
-        _suppliers = suppliers;
+        _parties = parties;
         _colors = colors;
-        _locations = locations;
-        
         _yarns = yarns;
+        _company = selectedCompany;
+        _locations = locations;
         _loading = false;
       });
     } catch (e) {
       if (!mounted) return;
 
       setState(() => _loading = false);
-
       _showError(e.toString());
     }
   }
 
   Future<void> _save() async {
     if (_company == null) {
-      _showError('Select the company that owns this yarn.');
+      _showError('No company is configured for yarn receipt.');
       return;
     }
 
-    if (_supplier == null) {
-      _showError('Select a supplier.');
+    if (_party == null) {
+      _showError('Select the customer / party sending the yarn.');
       return;
     }
 
@@ -598,7 +839,7 @@ class _ReceiveYarnDialogState extends State<_ReceiveYarnDialog> {
     if (_location == null) {
       _showError(
         _locations.isEmpty
-            ? 'No active location is configured for the selected company. Please create a location first.'
+            ? 'No active location is configured.'
             : 'Select a location.',
       );
       return;
@@ -620,8 +861,8 @@ class _ReceiveYarnDialogState extends State<_ReceiveYarnDialog> {
         return;
       }
 
-      final lineKey = '${line.yarnId}|${line.colorId}';
-      if (!seen.add(lineKey)) {
+      final key = '${line.yarnId}|${line.colorId}';
+      if (!seen.add(key)) {
         _showError(
           'The same Yarn + Color cannot be entered twice in one receipt.',
         );
@@ -630,29 +871,23 @@ class _ReceiveYarnDialogState extends State<_ReceiveYarnDialog> {
 
       final boxesText = line.boxes.text.trim();
       final boxes = boxesText.isEmpty ? null : int.tryParse(boxesText);
+
       if (boxesText.isNotEmpty && (boxes == null || boxes < 0)) {
-        _showError('Enter a valid whole number of boxes on line ${i + 1}.');
+        _showError('Invalid box count on line ${i + 1}.');
         return;
       }
 
-      final quantity = double.tryParse(
-        line.quantity.text.trim(),
-      );
+      final quantity = double.tryParse(line.quantity.text.trim());
 
       if (quantity == null || quantity <= 0) {
-        _showError(
-          'Enter a quantity greater than zero on line ${i + 1}.',
-        );
+        _showError('Enter quantity greater than zero on line ${i + 1}.');
         return;
       }
 
       final rateText = line.rate.text.trim();
-      final rate = rateText.isEmpty
-          ? null
-          : double.tryParse(rateText);
+      final rate = rateText.isEmpty ? null : double.tryParse(rateText);
 
-      if (rateText.isNotEmpty &&
-          (rate == null || rate < 0)) {
+      if (rateText.isNotEmpty && (rate == null || rate < 0)) {
         _showError('Invalid rate on line ${i + 1}.');
         return;
       }
@@ -661,10 +896,9 @@ class _ReceiveYarnDialogState extends State<_ReceiveYarnDialog> {
         'yarn_id': line.yarnId,
         'color_id': line.colorId,
         'box_count': boxes,
-        'supplier_lot_no':
-            line.supplierLot.text.trim().isEmpty
-                ? null
-                : line.supplierLot.text.trim(),
+        'supplier_lot_no': line.supplierLot.text.trim().isEmpty
+            ? null
+            : line.supplierLot.text.trim(),
         'quantity': quantity,
         'unit_rate': rate,
       });
@@ -676,46 +910,34 @@ class _ReceiveYarnDialogState extends State<_ReceiveYarnDialog> {
       final result = await _api.createReceipt(
         receiptDate: _date.text.trim(),
         companyId: _company!.id,
-        challanNo: _challan.text.trim().isEmpty
-            ? null
-            : _challan.text.trim(),
-        billNo: _bill.text.trim().isEmpty
-            ? null
-            : _bill.text.trim(),
-        supplierId: _supplier!.id,
+        partyId: _party!.id,
+        challanNo:
+            _challan.text.trim().isEmpty ? null : _challan.text.trim(),
+        billNo: _bill.text.trim().isEmpty ? null : _bill.text.trim(),
         locationId: _location!.id,
-        notes: _notes.text.trim().isEmpty
-            ? null
-            : _notes.text.trim(),
+        notes: _notes.text.trim().isEmpty ? null : _notes.text.trim(),
         lines: lines,
       );
 
       if (!mounted) return;
 
       final receipt = result['receipt'];
-      final receiptNo = receipt is Map
-          ? '${receipt['receipt_no'] ?? ''}'
-          : '';
+      final receiptNo =
+          receipt is Map ? '${receipt['receipt_no'] ?? ''}' : '';
 
       Navigator.of(context).pop(true);
 
       if (receiptNo.isNotEmpty) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(
-              'Receipt $receiptNo posted successfully.',
-            ),
+            content: Text('Receipt $receiptNo posted successfully.'),
           ),
         );
       }
     } catch (e) {
-      if (mounted) {
-        _showError(e.toString());
-      }
+      if (mounted) _showError(e.toString());
     } finally {
-      if (mounted) {
-        setState(() => _saving = false);
-      }
+      if (mounted) setState(() => _saving = false);
     }
   }
 
@@ -728,7 +950,6 @@ class _ReceiveYarnDialogState extends State<_ReceiveYarnDialog> {
 
     final line = _lines.removeAt(index);
     line.dispose();
-
     setState(() {});
   }
 
@@ -739,9 +960,7 @@ class _ReceiveYarnDialogState extends State<_ReceiveYarnDialog> {
       context: context,
       builder: (_) => AlertDialog(
         title: const Text('Receive Yarn'),
-        content: Text(
-          message.replaceFirst('Exception: ', ''),
-        ),
+        content: Text(message.replaceFirst('Exception: ', '')),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
@@ -752,11 +971,13 @@ class _ReceiveYarnDialogState extends State<_ReceiveYarnDialog> {
     );
   }
 
-  InputDecoration _decoration(String label) => InputDecoration(
-        labelText: label,
-        border: const OutlineInputBorder(),
-        isDense: true,
-      );
+  InputDecoration _decoration(String label) {
+    return InputDecoration(
+      labelText: label,
+      border: const OutlineInputBorder(),
+      isDense: true,
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -784,19 +1005,18 @@ class _ReceiveYarnDialogState extends State<_ReceiveYarnDialog> {
                       children: [
                         const Expanded(
                           child: Column(
-                            crossAxisAlignment:
-                                CrossAxisAlignment.start,
+                            crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
                                 'Receive Yarn',
                                 style: TextStyle(
                                   fontSize: 24,
-                                  fontWeight: FontWeight.w700,
+                                  fontWeight: FontWeight.w900,
                                 ),
                               ),
                               SizedBox(height: 4),
                               Text(
-                                'Add one or multiple yarns against the same challan/bill.',
+                                'Post yarn received from a customer / party.',
                                 style: TextStyle(
                                   color: _muted,
                                   fontSize: 12,
@@ -806,9 +1026,8 @@ class _ReceiveYarnDialogState extends State<_ReceiveYarnDialog> {
                           ),
                         ),
                         IconButton(
-                          onPressed: _saving
-                              ? null
-                              : () => Navigator.pop(context),
+                          onPressed:
+                              _saving ? null : () => Navigator.pop(context),
                           icon: const Icon(Icons.close),
                         ),
                       ],
@@ -822,79 +1041,87 @@ class _ReceiveYarnDialogState extends State<_ReceiveYarnDialog> {
                               padding: const EdgeInsets.all(16),
                               decoration: BoxDecoration(
                                 color: _panel2,
-                                borderRadius:
-                                    BorderRadius.circular(10),
-                                border:
-                                    Border.all(color: _border),
+                                borderRadius: BorderRadius.circular(5),
+                                border: Border.all(color: _border),
                               ),
                               child: Wrap(
                                 spacing: 12,
                                 runSpacing: 12,
                                 children: [
-                                  SizedBox(
-                                    width: 230,
-                                    child: DropdownButtonFormField<YarnReceiptCompany>(
-                                      value: _company,
-                                      isExpanded: true,
-                                      decoration: _decoration('Company *'),
-                                      items: _companies
-                                          .map(
-                                            (c) => DropdownMenuItem(
-                                              value: c,
-                                              child: Text(
-                                                c.name,
-                                                overflow: TextOverflow.ellipsis,
+                                  if (_companies.length > 1)
+                                    SizedBox(
+                                      width: 230,
+                                      child: DropdownButtonFormField<
+                                          YarnReceiptCompany>(
+                                        value: _company,
+                                        isExpanded: true,
+                                        decoration:
+                                            _decoration('Company'),
+                                        items: _companies
+                                            .map(
+                                              (c) => DropdownMenuItem(
+                                                value: c,
+                                                child: Text(
+                                                  c.name,
+                                                  overflow:
+                                                      TextOverflow.ellipsis,
+                                                ),
                                               ),
-                                            ),
-                                          )
-                                          .toList(),
-                                      onChanged: _saving
-                                          ? null
-                                          : (v) async {
-                                              setState(() {
-                                                _company = v;
-                                                _location = null;
-                                                _locations = [];
-                                              });
+                                            )
+                                            .toList(),
+                                        onChanged: _saving
+                                            ? null
+                                            : (v) async {
+                                                setState(() {
+                                                  _company = v;
+                                                  _location = null;
+                                                  _locations = [];
+                                                });
 
-                                              if (v == null) return;
+                                                if (v == null) return;
 
-                                              try {
-                                                final locations = await _api.getLocations(companyId: v.id);
-                                                if (!mounted) return;
-                                                setState(() => _locations = locations);
-                                              } catch (e) {
-                                                if (mounted) _showError(e.toString());
-                                              }
-                                            },
+                                                try {
+                                                  final locations =
+                                                      await _api.getLocations(
+                                                    companyId: v.id,
+                                                  );
+                                                  if (!mounted) return;
+                                                  setState(() =>
+                                                      _locations =
+                                                          locations);
+                                                } catch (e) {
+                                                  if (mounted) {
+                                                    _showError(e.toString());
+                                                  }
+                                                }
+                                              },
+                                      ),
                                     ),
-                                  ),
                                   SizedBox(
                                     width: 170,
                                     child: TextField(
                                       controller: _date,
-                                      decoration: _decoration('Receipt Date'),
+                                      decoration:
+                                          _decoration('Receipt Date'),
                                     ),
                                   ),
                                   SizedBox(
-                                    width: 260,
-                                    child:
-                                        DropdownButtonFormField<
-                                            YarnReceiptSupplier>(
-                                      value: _supplier,
+                                    width: 300,
+                                    child: DropdownButtonFormField<
+                                        YarnReceiptParty>(
+                                      value: _party,
                                       isExpanded: true,
-                                      decoration:
-                                          _decoration('Supplier'),
-                                      items: _suppliers
+                                      decoration: _decoration(
+                                        'Customer / Party *',
+                                      ),
+                                      items: _parties
                                           .map(
-                                            (s) =>
-                                                DropdownMenuItem(
-                                              value: s,
+                                            (p) => DropdownMenuItem(
+                                              value: p,
                                               child: Text(
-                                                s.name,
+                                                p.name,
                                                 overflow:
-                                                    TextOverflow
-                                                        .ellipsis,
+                                                    TextOverflow.ellipsis,
                                               ),
                                             ),
                                           )
@@ -902,8 +1129,7 @@ class _ReceiveYarnDialogState extends State<_ReceiveYarnDialog> {
                                       onChanged: _saving
                                           ? null
                                           : (v) => setState(
-                                                () =>
-                                                    _supplier = v,
+                                                () => _party = v,
                                               ),
                                     ),
                                   ),
@@ -911,9 +1137,8 @@ class _ReceiveYarnDialogState extends State<_ReceiveYarnDialog> {
                                     width: 190,
                                     child: TextField(
                                       controller: _challan,
-                                      decoration: _decoration(
-                                        'Challan No.',
-                                      ),
+                                      decoration:
+                                          _decoration('Challan No.'),
                                     ),
                                   ),
                                   SizedBox(
@@ -926,23 +1151,20 @@ class _ReceiveYarnDialogState extends State<_ReceiveYarnDialog> {
                                   ),
                                   SizedBox(
                                     width: 220,
-                                    child:
-                                        DropdownButtonFormField<
-                                            YarnReceiptLocation>(
+                                    child: DropdownButtonFormField<
+                                        YarnReceiptLocation>(
                                       value: _location,
                                       isExpanded: true,
                                       decoration:
                                           _decoration('Location *'),
                                       items: _locations
                                           .map(
-                                            (l) =>
-                                                DropdownMenuItem(
+                                            (l) => DropdownMenuItem(
                                               value: l,
                                               child: Text(
                                                 l.name,
                                                 overflow:
-                                                    TextOverflow
-                                                        .ellipsis,
+                                                    TextOverflow.ellipsis,
                                               ),
                                             ),
                                           )
@@ -950,8 +1172,7 @@ class _ReceiveYarnDialogState extends State<_ReceiveYarnDialog> {
                                       onChanged: _saving
                                           ? null
                                           : (v) => setState(
-                                                () =>
-                                                    _location = v,
+                                                () => _location = v,
                                               ),
                                     ),
                                   ),
@@ -971,10 +1192,8 @@ class _ReceiveYarnDialogState extends State<_ReceiveYarnDialog> {
                               padding: const EdgeInsets.all(16),
                               decoration: BoxDecoration(
                                 color: _panel2,
-                                borderRadius:
-                                    BorderRadius.circular(10),
-                                border:
-                                    Border.all(color: _border),
+                                borderRadius: BorderRadius.circular(5),
+                                border: Border.all(color: _border),
                               ),
                               child: Column(
                                 crossAxisAlignment:
@@ -987,191 +1206,178 @@ class _ReceiveYarnDialogState extends State<_ReceiveYarnDialog> {
                                           'Yarn Lines',
                                           style: TextStyle(
                                             fontSize: 16,
-                                            fontWeight:
-                                                FontWeight.w700,
+                                            fontWeight: FontWeight.w900,
                                           ),
                                         ),
                                       ),
                                       OutlinedButton.icon(
                                         onPressed:
                                             _saving ? null : _addLine,
-                                        icon:
-                                            const Icon(Icons.add),
-                                        label:
-                                            const Text('Add Yarn'),
+                                        icon: const Icon(Icons.add),
+                                        label: const Text('Add Yarn'),
                                       ),
                                     ],
                                   ),
                                   const SizedBox(height: 12),
-                                  ...List.generate(
-                                    _lines.length,
-                                    (index) {
-                                      final line =
-                                          _lines[index];
+                                  ...List.generate(_lines.length, (index) {
+                                    final line = _lines[index];
 
-                                      final seenIds =
-                                          <String>{};
+                                    final seen = <String>{};
+                                    final yarnItems = _yarns
+                                        .where((y) {
+                                          final id =
+                                              '${y['id'] ?? ''}'.trim();
+                                          if (id.isEmpty ||
+                                              !seen.add(id)) {
+                                            return false;
+                                          }
+                                          return true;
+                                        })
+                                        .map((y) {
+                                          final id = '${y['id']}';
+                                          final name =
+                                              '${y['name'] ?? y['yarn_name'] ?? ''}'
+                                                  .trim();
+                                          final count =
+                                              '${y['count'] ?? y['yarn_count'] ?? ''}'
+                                                  .trim();
 
-                                      final yarnItems = _yarns
-                                          .where((y) {
-                                            final id =
-                                                '${y['id'] ?? ''}'
-                                                    .trim();
-                                            if (id.isEmpty ||
-                                                !seenIds
-                                                    .add(id)) {
-                                              return false;
-                                            }
-                                            return true;
-                                          })
-                                          .map(
-                                            (y) {
-                                              final id =
-                                                  '${y['id']}';
-                                              final name =
-                                                  '${y['name'] ?? ''}'
-                                                      .trim();
-                                              final count =
-                                                  '${y['count'] ?? ''}'
-                                                      .trim();
-                                              final label =
-                                                  '$name${count.isEmpty ? '' : ' • $count'}';
+                                          final label = '$name'
+                                              '${count.isEmpty ? '' : ' • $count'}';
 
-                                              return DropdownMenuItem<
-                                                  String>(
-                                                value: id,
-                                                child: Text(
-                                                  label,
-                                                  overflow:
-                                                      TextOverflow
-                                                          .ellipsis,
-                                                ),
-                                              );
-                                            },
-                                          )
-                                          .toList();
+                                          return DropdownMenuItem<String>(
+                                            value: id,
+                                            child: Text(
+                                              label,
+                                              overflow:
+                                                  TextOverflow.ellipsis,
+                                            ),
+                                          );
+                                        })
+                                        .toList();
 
-                                      return Padding(
-                                        padding:
-                                            const EdgeInsets.only(
-                                          bottom: 10,
-                                        ),
-                                        child: Wrap(
-                                          spacing: 10,
-                                          runSpacing: 10,
-                                          crossAxisAlignment:
-                                              WrapCrossAlignment
-                                                  .center,
-                                          children: [
-                                            SizedBox(
-                                              width: 320,
-                                              child:
-                                                  DropdownButtonFormField<
-                                                      String>(
-                                                value: line.yarnId,
-                                                isExpanded: true,
-                                                decoration:
-                                                    _decoration(
-                                                  'Yarn ${index + 1}',
-                                                ),
-                                                items: yarnItems,
-                                                onChanged: _saving
-                                                    ? null
-                                                    : (v) =>
-                                                        setState(
-                                                          () => line
-                                                              .yarnId = v,
-                                                        ),
+                                    return Padding(
+                                      padding:
+                                          const EdgeInsets.only(bottom: 10),
+                                      child: Wrap(
+                                        spacing: 10,
+                                        runSpacing: 10,
+                                        crossAxisAlignment:
+                                            WrapCrossAlignment.center,
+                                        children: [
+                                          SizedBox(
+                                            width: 320,
+                                            child:
+                                                DropdownButtonFormField<
+                                                    String>(
+                                              value: line.yarnId,
+                                              isExpanded: true,
+                                              decoration: _decoration(
+                                                'Yarn ${index + 1}',
                                               ),
-                                            ),
-                                            SizedBox(
-                                              width: 190,
-                                              child: DropdownButtonFormField<String>(
-                                                value: line.colorId,
-                                                isExpanded: true,
-                                                decoration: _decoration('Color ${index + 1}'),
-                                                items: _colors
-                                                    .map((c) => DropdownMenuItem<String>(
-                                                          value: c.id,
-                                                          child: Text(c.name, overflow: TextOverflow.ellipsis),
-                                                        ))
-                                                    .toList(),
-                                                onChanged: _saving
-                                                    ? null
-                                                    : (v) => setState(() => line.colorId = v),
-                                              ),
-                                            ),
-                                            SizedBox(
-                                              width: 145,
-                                              child: TextField(
-                                                controller: line.boxes,
-                                                keyboardType: TextInputType.number,
-                                                decoration: _decoration('No. of Boxes'),
-                                              ),
-                                            ),
-                                            SizedBox(
-                                              width: 180,
-                                              child: TextField(
-                                                controller: line.supplierLot,
-                                                decoration:
-                                                    _decoration(
-                                                  'Supplier Lot No.',
-                                                ),
-                                              ),
-                                            ),
-                                            SizedBox(
-                                              width: 140,
-                                              child: TextField(
-                                                controller:
-                                                    line.quantity,
-                                                keyboardType:
-                                                    const TextInputType
-                                                        .numberWithOptions(
-                                                  decimal: true,
-                                                ),
-                                                decoration:
-                                                    _decoration(
-                                                  'Qty (kg)',
-                                                ),
-                                              ),
-                                            ),
-                                            SizedBox(
-                                              width: 130,
-                                              child: TextField(
-                                                controller:
-                                                    line.rate,
-                                                keyboardType:
-                                                    const TextInputType
-                                                        .numberWithOptions(
-                                                  decimal: true,
-                                                ),
-                                                decoration:
-                                                    _decoration(
-                                                  'Rate',
-                                                ),
-                                              ),
-                                            ),
-                                            IconButton(
-                                              onPressed: _saving ||
-                                                      _lines.length ==
-                                                          1
+                                              items: yarnItems,
+                                              onChanged: _saving
                                                   ? null
-                                                  : () =>
-                                                      _removeLine(
-                                                        index,
+                                                  : (v) => setState(
+                                                        () => line.yarnId =
+                                                            v,
                                                       ),
-                                              icon: const Icon(
-                                                Icons
-                                                    .delete_outline,
-                                              ),
-                                              tooltip:
-                                                  'Remove line',
                                             ),
-                                          ],
-                                        ),
-                                      );
-                                    },
-                                  ),
+                                          ),
+                                          SizedBox(
+                                            width: 190,
+                                            child:
+                                                DropdownButtonFormField<
+                                                    String>(
+                                              value: line.colorId,
+                                              isExpanded: true,
+                                              decoration: _decoration(
+                                                'Color ${index + 1}',
+                                              ),
+                                              items: _colors
+                                                  .map(
+                                                    (c) =>
+                                                        DropdownMenuItem<
+                                                            String>(
+                                                      value: c.id,
+                                                      child: Text(
+                                                        c.name,
+                                                        overflow:
+                                                            TextOverflow
+                                                                .ellipsis,
+                                                      ),
+                                                    ),
+                                                  )
+                                                  .toList(),
+                                              onChanged: _saving
+                                                  ? null
+                                                  : (v) => setState(
+                                                        () => line.colorId =
+                                                            v,
+                                                      ),
+                                            ),
+                                          ),
+                                          SizedBox(
+                                            width: 145,
+                                            child: TextField(
+                                              controller: line.boxes,
+                                              keyboardType:
+                                                  TextInputType.number,
+                                              decoration: _decoration(
+                                                'No. of Boxes',
+                                              ),
+                                            ),
+                                          ),
+                                          SizedBox(
+                                            width: 180,
+                                            child: TextField(
+                                              controller: line.supplierLot,
+                                              decoration: _decoration(
+                                                'Supplier Lot No.',
+                                              ),
+                                            ),
+                                          ),
+                                          SizedBox(
+                                            width: 140,
+                                            child: TextField(
+                                              controller: line.quantity,
+                                              keyboardType:
+                                                  const TextInputType
+                                                      .numberWithOptions(
+                                                decimal: true,
+                                              ),
+                                              decoration: _decoration(
+                                                'Qty (kg)',
+                                              ),
+                                            ),
+                                          ),
+                                          SizedBox(
+                                            width: 130,
+                                            child: TextField(
+                                              controller: line.rate,
+                                              keyboardType:
+                                                  const TextInputType
+                                                      .numberWithOptions(
+                                                decimal: true,
+                                              ),
+                                              decoration:
+                                                  _decoration('Rate'),
+                                            ),
+                                          ),
+                                          IconButton(
+                                            onPressed: _saving ||
+                                                    _lines.length == 1
+                                                ? null
+                                                : () => _removeLine(index),
+                                            icon: const Icon(
+                                              Icons.delete_outline,
+                                            ),
+                                            tooltip: 'Remove line',
+                                          ),
+                                        ],
+                                      ),
+                                    );
+                                  }),
                                 ],
                               ),
                             ),
@@ -1181,8 +1387,7 @@ class _ReceiveYarnDialogState extends State<_ReceiveYarnDialog> {
                     ),
                     const SizedBox(height: 16),
                     Row(
-                      mainAxisAlignment:
-                          MainAxisAlignment.end,
+                      mainAxisAlignment: MainAxisAlignment.end,
                       children: [
                         OutlinedButton(
                           onPressed: _saving
@@ -1197,19 +1402,16 @@ class _ReceiveYarnDialogState extends State<_ReceiveYarnDialog> {
                               ? const SizedBox(
                                   width: 16,
                                   height: 16,
-                                  child:
-                                      CircularProgressIndicator(
+                                  child: CircularProgressIndicator(
                                     strokeWidth: 2,
                                   ),
                                 )
                               : const Icon(Icons.check),
                           label: Text(
-                            _saving
-                                ? 'Posting...'
-                                : 'Post Receipt',
+                            _saving ? 'Posting...' : 'Post Receipt',
                           ),
                           style: FilledButton.styleFrom(
-                            backgroundColor: _teal,
+                            backgroundColor: _accent,
                             foregroundColor: Colors.white,
                           ),
                         ),

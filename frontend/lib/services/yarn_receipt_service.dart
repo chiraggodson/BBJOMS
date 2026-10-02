@@ -45,19 +45,19 @@ class YarnReceiptColor {
   }
 }
 
-class YarnReceiptSupplier {
+class YarnReceiptParty {
   final String id;
   final String code;
   final String name;
 
-  YarnReceiptSupplier({
+  YarnReceiptParty({
     required this.id,
     required this.code,
     required this.name,
   });
 
-  factory YarnReceiptSupplier.fromJson(Map<String, dynamic> json) {
-    return YarnReceiptSupplier(
+  factory YarnReceiptParty.fromJson(Map<String, dynamic> json) {
+    return YarnReceiptParty(
       id: '${json['id'] ?? ''}',
       code: '${json['code'] ?? json['party_code'] ?? ''}',
       name: '${json['name'] ?? ''}',
@@ -127,14 +127,13 @@ class YarnReceiptApi {
   }
 
   // ------------------------------------------------------------
-  // Yarn Suppliers
-  // Uses the same Parties API that the existing Parties screen uses.
-  // This is important because the current party module stores roles as
-  // party_roles.role = 'Yarn Supplier'.
+  // Party / Customer
+  // The selected party is the account/customer for this yarn receipt.
+  // The company is handled automatically by the current app setup.
   // ------------------------------------------------------------
-  Future<List<YarnReceiptSupplier>> getSuppliers() async {
+  Future<List<YarnReceiptParty>> getParties() async {
     final uri = Uri.parse(
-      '$baseUrl/parties?role=${Uri.encodeQueryComponent('Yarn Supplier')}&active=true',
+      '$baseUrl/parties?role=${Uri.encodeQueryComponent('Customer')}&active=true',
     );
 
     final r = await _client.get(uri);
@@ -152,18 +151,29 @@ class YarnReceiptApi {
     }
 
     return list
-        .map((e) => YarnReceiptSupplier.fromJson(
+        .map((e) => YarnReceiptParty.fromJson(
               Map<String, dynamic>.from(e as Map),
             ))
-        .where((s) => s.id.isNotEmpty && s.name.isNotEmpty)
+        .where((p) => p.id.isNotEmpty && p.name.isNotEmpty)
         .toList();
   }
 
   Future<List<YarnReceiptColor>> getColors() async {
-    final r = await _client.get(
-      Uri.parse('$baseUrl/yarn-receipts/colors'),
-    );
-    _check(r);
+    // Primary endpoint is the receipt-specific endpoint. Keep a fallback
+    // to the Color Master endpoint so Receive Yarn remains compatible if
+    // the backend is temporarily running an older receipt route.
+    http.Response r;
+    try {
+      r = await _client.get(
+        Uri.parse('$baseUrl/yarn-receipts/colors'),
+      );
+      _check(r);
+    } catch (_) {
+      r = await _client.get(
+        Uri.parse('$baseUrl/yarns/colors'),
+      );
+      _check(r);
+    }
 
     final decoded = jsonDecode(r.body);
     final List<dynamic> list;
@@ -249,7 +259,7 @@ class YarnReceiptApi {
     String? challanNo,
     String? billNo,
     required String companyId,
-    required String supplierId,
+    required String partyId,
     String? locationId,
     String? notes,
     String? financialYearId,
@@ -263,7 +273,7 @@ class YarnReceiptApi {
         'company_id': companyId,
         'challan_no': _clean(challanNo),
         'bill_no': _clean(billNo),
-        'party_id': supplierId,
+        'party_id': partyId,
         'location_id': _clean(locationId),
         'notes': _clean(notes),
         'financial_year_id': _clean(financialYearId),
@@ -309,7 +319,6 @@ class YarnReceiptApi {
 
   // ------------------------------------------------------------
   // Live yarn stock available for issue.
-  // One row represents a yarn lot at a specific location.
   // ------------------------------------------------------------
   Future<List<Map<String, dynamic>>> getYarnStock() async {
     final r = await _client.get(
