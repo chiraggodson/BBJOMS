@@ -555,7 +555,7 @@ class ApiService {
   // DELETE JOB
   // ============================================================
 
-  Future<void> deleteJob(int id) async {
+  Future<void> deleteJob(String id) async {
     final response = await http.delete(
       Uri.parse('$baseUrl/jobs/$id'),
     );
@@ -779,9 +779,9 @@ class ApiService {
   // ============================================================
 
   Future<JobOrder> updateJob({
-    required int id,
+    required String id,
     required String partyId,
-    required String fabricName,
+    required String fabricId,
     required double gsm,
     required double orderQuantity,
     List<int> machineIds = const [],
@@ -791,13 +791,14 @@ class ApiService {
 
     final body = <String, dynamic>{
       'party_id': partyId,
-      'fabric_name': fabricName,
+      'fabric_id': fabricId,
       'gsm': gsm,
       'order_quantity': orderQuantity,
       'machine_ids': machineIds,
       'yarns': yarns
           .map(
             (yarn) => {
+              'yarn_id': yarn.yarnId,
               'yarn_name': yarn.yarnName,
               'yarn_count': yarn.yarnCount,
               'required_kg': yarn.quantity,
@@ -1540,7 +1541,10 @@ class JobYarnRequirement {
 // ============================================================
 
 class JobOrder {
+  // Keep the existing numeric id for Flutter-side maps/grouping.
+  // The backend UUID is kept separately for API references.
   final int id;
+  final String uuid;
   final String jobNo;
   final int? fabricId;
   final String fabricName;
@@ -1559,6 +1563,7 @@ class JobOrder {
 
   const JobOrder({
     required this.id,
+    required this.uuid,
     required this.jobNo,
     required this.fabricId,
     required this.fabricName,
@@ -1577,11 +1582,26 @@ class JobOrder {
   });
 
   factory JobOrder.fromJson(Map<String, dynamic> json) {
-    // The current jobs API returns camelCase fields. Keep snake_case
-    // fallbacks so this model remains compatible with older responses.
+    // The current jobs API returns the UUID as `id`. Preserve it in
+    // `uuid`, while keeping the old numeric Flutter id for compatibility.
+    final jobNo =
+        (json['jobNo'] ?? json['job_no'])?.toString() ?? '';
+    final uuid =
+        (json['uuid'] ?? json['job_id'] ?? json['id'])?.toString() ?? '';
+
+    final suppliedNumericId = _toInt(
+      json['numericId'] ??
+          json['numeric_id'] ??
+          json['numberId'] ??
+          json['number_id'],
+    );
+
     return JobOrder(
-      id: _toInt(json['id']),
-      jobNo: (json['jobNo'] ?? json['job_no'])?.toString() ?? '',
+      id: suppliedNumericId > 0
+          ? suppliedNumericId
+          : _jobNumberToInt(jobNo),
+      uuid: uuid,
+      jobNo: jobNo,
       fabricId: _toNullableInt(json['fabricId'] ?? json['fabric_id']),
       fabricName:
           (json['fabricName'] ?? json['fabric_name'])?.toString() ?? '',
@@ -1601,7 +1621,10 @@ class JobOrder {
           _toDouble(json['orderQuantity'] ?? json['order_quantity']),
       status: json['status']?.toString() ?? '',
       createdAt:
-          (json['createdAt'] ?? json['created_at'] ?? json['jobDate'] ?? json['job_date'])
+          (json['createdAt'] ??
+                  json['created_at'] ??
+                  json['jobDate'] ??
+                  json['job_date'])
               ?.toString() ??
           '',
       yarnsUsed:
@@ -1838,6 +1861,11 @@ int _toInt(dynamic value) {
         value?.toString() ?? '',
       ) ??
       0;
+}
+
+int _jobNumberToInt(String jobNo) {
+  final match = RegExp(r'(\d+)\s*$').firstMatch(jobNo);
+  return int.tryParse(match?.group(1) ?? '') ?? 0;
 }
 
 int? _toNullableInt(dynamic value) {

@@ -306,7 +306,7 @@ class _JobOrdersPageState extends State<JobOrdersPage> {
     if (confirmed != true || !mounted) return;
 
     try {
-      await _apiService.deleteJob(job.id);
+      await _apiService.deleteJob(job.uuid);
 
       if (!mounted) return;
 
@@ -2671,7 +2671,7 @@ class _EditJobOrderDialogState
   Party? _selectedParty;
   Fabric? _selectedFabric;
 
-  int get _jobId => widget.details.job.id;
+  String get _jobId => widget.details.job.uuid;
   String get _jobNo => widget.details.job.jobNo;
 
   final _gsmController = TextEditingController();
@@ -2890,7 +2890,7 @@ class _EditJobOrderDialogState
       await widget.apiService.updateJob(
         id: _jobId,
         partyId: _selectedParty!.id,
-        fabricName: fabricName,
+        fabricId: fabricId,
         gsm: gsm,
         orderQuantity: quantity,
         machineIds: _selectedMachineIds.toList(),
