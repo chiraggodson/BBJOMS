@@ -158,6 +158,35 @@ class YarnReceiptApi {
         .toList();
   }
 
+  Future<List<YarnReceiptParty>> getSuppliers({String? partyId}) async {
+    final query = <String, String>{};
+    if (partyId != null && partyId.trim().isNotEmpty) {
+      query['party_id'] = partyId.trim();
+    }
+
+    final uri = Uri.parse('$baseUrl/yarn-receipts/suppliers').replace(
+      queryParameters: query.isEmpty ? null : query,
+    );
+
+    final r = await _client.get(uri);
+    _check(r);
+
+    final decoded = jsonDecode(r.body);
+    final List<dynamic> list;
+
+    if (decoded is List) {
+      list = decoded;
+    } else if (decoded is Map<String, dynamic> && decoded['suppliers'] is List) {
+      list = decoded['suppliers'] as List<dynamic>;
+    } else {
+      list = <dynamic>[];
+    }
+
+    return list
+        .map((e) => YarnReceiptParty.fromJson(Map<String, dynamic>.from(e as Map)))
+        .toList();
+  }
+
   Future<List<YarnReceiptColor>> getColors() async {
     // Primary endpoint is the receipt-specific endpoint. Keep a fallback
     // to the Color Master endpoint so Receive Yarn remains compatible if
@@ -260,6 +289,7 @@ class YarnReceiptApi {
     String? billNo,
     required String companyId,
     required String partyId,
+    required String supplierPartyId,
     String? locationId,
     String? notes,
     String? financialYearId,
@@ -274,6 +304,7 @@ class YarnReceiptApi {
         'challan_no': _clean(challanNo),
         'bill_no': _clean(billNo),
         'party_id': partyId,
+        'supplier_party_id': supplierPartyId,
         'location_id': _clean(locationId),
         'notes': _clean(notes),
         'financial_year_id': _clean(financialYearId),

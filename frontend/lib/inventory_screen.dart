@@ -739,12 +739,14 @@ class _ReceiveYarnDialogState extends State<_ReceiveYarnDialog> {
 
   List<YarnReceiptCompany> _companies = [];
   List<YarnReceiptParty> _parties = [];
+  List<YarnReceiptParty> _suppliers = [];
   List<YarnReceiptColor> _colors = [];
   List<YarnReceiptLocation> _locations = [];
   List<Map<String, dynamic>> _yarns = [];
 
   YarnReceiptCompany? _company;
   YarnReceiptParty? _party;
+  YarnReceiptParty? _supplier;
   YarnReceiptLocation? _location;
 
   bool _loading = true;
@@ -778,6 +780,7 @@ class _ReceiveYarnDialogState extends State<_ReceiveYarnDialog> {
       final results = await Future.wait([
         _api.getCompanies(),
         _api.getParties(),
+        _api.getSuppliers(),
         _api.getColors(),
         _api.getYarns(),
       ]);
@@ -786,8 +789,9 @@ class _ReceiveYarnDialogState extends State<_ReceiveYarnDialog> {
 
       final companies = results[0] as List<YarnReceiptCompany>;
       final parties = results[1] as List<YarnReceiptParty>;
-      final colors = results[2] as List<YarnReceiptColor>;
-      final yarns = results[3] as List<Map<String, dynamic>>;
+      final suppliers = results[2] as List<YarnReceiptParty>;
+      final colors = results[3] as List<YarnReceiptColor>;
+      final yarns = results[4] as List<Map<String, dynamic>>;
 
       YarnReceiptCompany? selectedCompany;
       if (companies.length == 1) {
@@ -806,6 +810,7 @@ class _ReceiveYarnDialogState extends State<_ReceiveYarnDialog> {
       setState(() {
         _companies = companies;
         _parties = parties;
+        _suppliers = suppliers;
         _colors = colors;
         _yarns = yarns;
         _company = selectedCompany;
@@ -828,6 +833,11 @@ class _ReceiveYarnDialogState extends State<_ReceiveYarnDialog> {
 
     if (_party == null) {
       _showError('Select the customer / party sending the yarn.');
+      return;
+    }
+
+    if (_supplier == null) {
+      _showError('Select the yarn supplier / source.');
       return;
     }
 
@@ -911,6 +921,7 @@ class _ReceiveYarnDialogState extends State<_ReceiveYarnDialog> {
         receiptDate: _date.text.trim(),
         companyId: _company!.id,
         partyId: _party!.id,
+        supplierPartyId: _supplier!.id,
         challanNo:
             _challan.text.trim().isEmpty ? null : _challan.text.trim(),
         billNo: _bill.text.trim().isEmpty ? null : _bill.text.trim(),
@@ -1128,8 +1139,57 @@ class _ReceiveYarnDialogState extends State<_ReceiveYarnDialog> {
                                           .toList(),
                                       onChanged: _saving
                                           ? null
+                                          : (v) async {
+                                              setState(() {
+                                                _party = v;
+                                                _supplier = null;
+                                              });
+
+                                              if (v == null) return;
+
+                                              try {
+                                                final suppliers =
+                                                    await _api.getSuppliers(
+                                                  partyId: v.id,
+                                                );
+                                                if (!mounted) return;
+                                                setState(() {
+                                                  _suppliers = suppliers;
+                                                  _supplier = null;
+                                                });
+                                              } catch (e) {
+                                                if (mounted) {
+                                                  _showError(e.toString());
+                                                }
+                                              }
+                                            },
+                                    ),
+                                  ),
+                                  SizedBox(
+                                    width: 300,
+                                    child: DropdownButtonFormField<
+                                        YarnReceiptParty>(
+                                      value: _supplier,
+                                      isExpanded: true,
+                                      decoration: _decoration(
+                                        'Yarn Supplier / Source *',
+                                      ),
+                                      items: _suppliers
+                                          .map(
+                                            (p) => DropdownMenuItem(
+                                              value: p,
+                                              child: Text(
+                                                p.name,
+                                                overflow:
+                                                    TextOverflow.ellipsis,
+                                              ),
+                                            ),
+                                          )
+                                          .toList(),
+                                      onChanged: _saving
+                                          ? null
                                           : (v) => setState(
-                                                () => _party = v,
+                                                () => _supplier = v,
                                               ),
                                     ),
                                   ),

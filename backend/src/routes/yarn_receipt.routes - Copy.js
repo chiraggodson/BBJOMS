@@ -250,8 +250,6 @@ router.get('/stock', async (req,res) => {
         COALESCE(c.name,'') AS color_name,
         yl.supplier_party_id,
         COALESCE(sp.name,'') AS supplier_name,
-        yl.stock_owner_party_id,
-        COALESCE(op.name,'') AS owner_name,
         led.location_id,
         COALESCE(loc.name,'') AS location_name,
         COALESCE(SUM(led.quantity_in-led.quantity_out),0)::float AS balance,
@@ -261,7 +259,6 @@ router.get('/stock', async (req,res) => {
       JOIN master.yarns y ON y.id=yl.yarn_id
       LEFT JOIN master.colors c ON c.id=yl.color_id
       LEFT JOIN master.parties sp ON sp.id=yl.supplier_party_id
-      LEFT JOIN master.parties op ON op.id=yl.stock_owner_party_id
       JOIN inventory.yarn_ledger led ON led.yarn_lot_id=yl.id
       LEFT JOIN master.locations loc ON loc.id=led.location_id
       WHERE yl.company_id=$1
@@ -269,9 +266,7 @@ router.get('/stock', async (req,res) => {
       GROUP BY
         yl.id,yl.lot_no,yl.supplier_lot_no,yl.received_date,
         yl.company_id,yl.yarn_id,y.code,y.name,yl.color_id,c.name,
-        yl.supplier_party_id,sp.name,
-        yl.stock_owner_party_id,op.name,
-        led.location_id,loc.name
+        yl.supplier_party_id,sp.name,led.location_id,loc.name
       HAVING COALESCE(SUM(led.quantity_in-led.quantity_out),0)>0
       ORDER BY y.name ASC,c.name ASC,yl.lot_no ASC,loc.name ASC
     `,[COMPANY_ID]);
@@ -428,14 +423,11 @@ router.post('/issue-batch', async (req,res) => {
         const lot = await client.query(`
           SELECT
             yl.id,yl.company_id,yl.yarn_id,yl.lot_no,
-            yl.stock_owner_party_id,
-            COALESCE(op.name,'') AS owner_name,
             COALESCE(y.name,'') AS yarn_name,
             COALESCE(c.name,'') AS color_name
           FROM master.yarn_lots yl
           JOIN master.yarns y ON y.id=yl.yarn_id
           LEFT JOIN master.colors c ON c.id=yl.color_id
-          LEFT JOIN master.parties op ON op.id=yl.stock_owner_party_id
           WHERE yl.id=$1
             AND yl.company_id=$2
             AND COALESCE(yl.is_active,true)=true
@@ -494,8 +486,6 @@ router.post('/issue-batch', async (req,res) => {
           yarn_id:lot.rows[0].yarn_id,
           yarn_name:lot.rows[0].yarn_name,
           color_name:lot.rows[0].color_name,
-          stock_owner_party_id:lot.rows[0].stock_owner_party_id,
-          owner_name:lot.rows[0].owner_name,
           location_id:line.locationId,
           location_name:location.rows[0].name,
           quantity:line.quantity
