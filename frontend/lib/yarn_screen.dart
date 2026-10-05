@@ -253,7 +253,29 @@ class _YarnPageState extends State<YarnPage> {
   Widget build(BuildContext context) {
     final yarns = _filteredYarns;
 
-    return SingleChildScrollView(
+final ownersByYarn = <String, Set<String>>{};
+
+for (final row in _stock) {
+  final yarnId = '${row['yarn_id'] ?? ''}'.trim();
+  final owner =
+      '${row['owner_name'] ?? row['stock_owner_name'] ?? ''}'.trim();
+
+  if (yarnId.isEmpty || owner.isEmpty || owner == 'null') {
+    continue;
+  }
+
+  ownersByYarn
+      .putIfAbsent(yarnId, () => <String>{})
+      .add(owner);
+}
+
+final ownerNamesByYarn = <String, String>{
+  for (final entry in ownersByYarn.entries)
+    entry.key: entry.value.join(', '),
+};
+
+return SingleChildScrollView(
+
       padding: const EdgeInsets.all(28),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -397,10 +419,11 @@ class _YarnPageState extends State<YarnPage> {
                   )
                 else
                   _YarnTable(
-                    yarns: yarns,
-                    onEdit: (yarn) => _openYarnForm(yarn: yarn),
-                    onDeactivate: _deactivateYarn,
-                  ),
+  yarns: yarns,
+  ownersByYarn: ownerNamesByYarn,
+  onEdit: (yarn) => _openYarnForm(yarn: yarn),
+  onDeactivate: _deactivateYarn,
+),
               ],
             ),
           ),
@@ -1743,11 +1766,13 @@ class _YarnStatCard extends StatelessWidget {
 
 class _YarnTable extends StatelessWidget {
   final List<YarnMaster> yarns;
+  final Map<String, String> ownersByYarn;
   final ValueChanged<YarnMaster> onEdit;
   final ValueChanged<YarnMaster> onDeactivate;
 
   const _YarnTable({
     required this.yarns,
+    required this.ownersByYarn,
     required this.onEdit,
     required this.onDeactivate,
   });
@@ -1810,6 +1835,19 @@ class _YarnTable extends StatelessWidget {
                             style: const TextStyle(
                               color: Color(0xFF5F6D78),
                               fontSize: 10,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            ownersByYarn[yarn.id]?.isNotEmpty == true
+                                ? 'Owner: ${ownersByYarn[yarn.id]}'
+                                : 'Owner: Not specified',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              color: BBTheme.redLight,
+                              fontSize: 10,
+                              fontWeight: FontWeight.w600,
                             ),
                           ),
                         ],
@@ -1882,6 +1920,13 @@ class _YarnTable extends StatelessWidget {
                       style: _TableHeaderStyle.style,
                     ),
                   ),
+                  Expanded(
+                    flex: 3,
+                    child: Text(
+                      'Owner',
+                      style: _TableHeaderStyle.style,
+                    ),
+                  ),
                   SizedBox(width: 48),
                 ],
               ),
@@ -1947,6 +1992,21 @@ class _YarnTable extends StatelessWidget {
                           style: const TextStyle(
                             color: Color(0xFF9BA7B2),
                             fontSize: 12,
+                          ),
+                        ),
+                       
+                      ),
+                      Expanded(
+                        flex: 3,
+                        child: Text(
+                          ownersByYarn[yarn.id]?.isNotEmpty == true
+                              ? ownersByYarn[yarn.id]!
+                              : '—',
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: BBTheme.redLight,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
                           ),
                         ),
                       ),

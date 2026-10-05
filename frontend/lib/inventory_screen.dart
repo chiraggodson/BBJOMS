@@ -109,13 +109,18 @@ class _InventoryPageState extends State<InventoryPage> {
       if (value.isNotEmpty && value != 'null') parts.add(value);
     }
 
-    for (final key in ['location_name', 'location']) {
-      final value = '${row[key] ?? ''}'.trim();
-      if (value.isNotEmpty && value != 'null') {
-        parts.add(value);
-        break;
-      }
-    }
+    final owner = '${row['owner_name'] ?? row['stock_owner_name'] ?? ''}'.trim();
+if (owner.isNotEmpty && owner != 'null') {
+  parts.add('Owner: $owner');
+}
+
+for (final key in ['location_name', 'location']) {
+  final value = '${row[key] ?? ''}'.trim();
+  if (value.isNotEmpty && value != 'null') {
+    parts.add(value);
+    break;
+  }
+}
 
     return parts.join(' • ');
   }
