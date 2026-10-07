@@ -1506,7 +1506,7 @@ class _YarnUsedCard extends StatelessWidget {
 }
 
 class _MachineList extends StatelessWidget {
-  final List<int> machineIds;
+  final List<String> machineIds;
 
   const _MachineList({
     required this.machineIds,
@@ -1837,7 +1837,7 @@ class _NewJobOrderDialogState extends State<_NewJobOrderDialog> {
   final _gsmController = TextEditingController();
   final _quantityController = TextEditingController();
 
-  final Set<int> _selectedMachineIds = {};
+  final Set<String> _selectedMachineIds = {};
   final List<_SelectedJobYarn> _selectedYarns = [];
 
   bool _loading = true;
@@ -2677,7 +2677,7 @@ class _EditJobOrderDialogState
   final _gsmController = TextEditingController();
   final _quantityController = TextEditingController();
 
-  final Set<int> _selectedMachineIds = {};
+  final Set<String> _selectedMachineIds = {};
   final List<_SelectedJobYarn> _selectedYarns = [];
 
   bool _loading = true;
@@ -2743,7 +2743,10 @@ class _EditJobOrderDialogState
       _quantityController.text = _formatNumber(job.orderQuantity);
 
       final selectedMachines =
-          widget.details.machineIds.where((id) => id > 0).toSet();
+          widget.details.machineIds
+              .map((id) => id.trim())
+              .where((id) => id.isNotEmpty)
+              .toSet();
 
       final selectedYarns = <_SelectedJobYarn>[];
 
@@ -3626,17 +3629,10 @@ class _EditJobOrderDialogState
   }
 }
 
-int _machineIdForSelection(Machine machine) {
-  // Machine IDs are numeric in BBJOMS. Some older / incomplete machine
-  // API responses may omit `id`, which the ApiService converts to 0.
-  // Never use 0 as the shared selection key because that makes every
-  // machine appear selected together.
-  if (machine.id > 0) {
-    return machine.id;
-  }
-
-  final fallback = int.tryParse(machine.machineNo.trim());
-  return fallback ?? -1;
+String _machineIdForSelection(Machine machine) {
+  // Machine identity is the backend UUID. Never use the machine number
+  // as a fallback because it is a display/business value, not the UUID.
+  return machine.id.trim();
 }
 
 class _SelectedJobYarn {

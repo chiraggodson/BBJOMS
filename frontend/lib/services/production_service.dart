@@ -47,8 +47,8 @@ class ProductionService {
   }
 
   Future<void> addProduction({
-    required int jobId,
-    required int machineId,
+    required String jobId,
+    required String machineId,
     required String productionDate,
     required String rollNo,
     required double quantityKg,

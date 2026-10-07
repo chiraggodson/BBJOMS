@@ -1557,7 +1557,7 @@ class _JobPickerDialog extends StatefulWidget {
 
 class _JobPickerDialogState extends State<_JobPickerDialog> {
   final TextEditingController _search = TextEditingController();
-  final Set<int> _selectedIds = <int>{};
+  final Set<String> _selectedIds = <String>{};
 
   @override
   void dispose() { _search.dispose(); super.dispose(); }

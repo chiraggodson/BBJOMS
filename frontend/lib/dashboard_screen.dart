@@ -21,7 +21,7 @@ class _DashboardPageState extends State<DashboardPage> {
   List<Machine> _machines = [];
   List<Map<String, dynamic>> _yarnStock = [];
 
-  final Map<int, double> _todayProduction = {};
+  final Map<String, double> _todayProduction = {};
 
   bool _loading = true;
   String? _error;
@@ -65,7 +65,7 @@ class _DashboardPageState extends State<DashboardPage> {
       final machines = results[1] as List<Machine>;
       final yarnStock = results[2] as List<Map<String, dynamic>>;
 
-      final today = <int, double>{};
+      final today = <String, double>{};
 
       // Production history is currently exposed job-by-job by the API.
       // Fetch it in parallel so the dashboard remains responsive.

@@ -19,8 +19,8 @@ class _ProductionPageState extends State<ProductionPage> {
 
   List<Machine> _machines = [];
   List<JobOrder> _jobs = [];
-  final Map<int, JobDetails> _details = {};
-  final Map<int, double> _todayProduction = {};
+  final Map<String, JobDetails> _details = {};
+  final Map<String, double> _todayProduction = {};
 
   bool _loading = true;
   String? _error;
@@ -52,8 +52,8 @@ class _ProductionPageState extends State<ProductionPage> {
       final machines = results[0] as List<Machine>;
       final jobs = results[1] as List<JobOrder>;
 
-      final details = <int, JobDetails>{};
-      final today = <int, double>{};
+      final details = <String, JobDetails>{};
+      final today = <String, double>{};
 
       await Future.wait(
         jobs.map((job) async {
@@ -623,7 +623,7 @@ class _JobCell extends StatelessWidget {
 class _ProductionEntryDialog extends StatefulWidget {
   final List<Machine> machines;
   final List<JobOrder> jobs;
-  final Map<int, JobDetails> details;
+  final Map<String, JobDetails> details;
   final ProductionService productionApi;
 
   const _ProductionEntryDialog({
@@ -639,7 +639,7 @@ class _ProductionEntryDialog extends StatefulWidget {
 }
 
 class _ProductionEntryDialogState extends State<_ProductionEntryDialog> {
-  final Map<int, List<_ProductionRoll>> _jobGroups = {};
+  final Map<String, List<_ProductionRoll>> _jobGroups = {};
   DateTime _productionDate = DateTime.now();
   bool _saving = false;
 
@@ -713,7 +713,7 @@ class _ProductionEntryDialogState extends State<_ProductionEntryDialog> {
     return 'R-$stamp';
   }
 
-  void _removeJobGroup(int jobId) {
+  void _removeJobGroup(String jobId) {
     final rolls = _jobGroups.remove(jobId);
     for (final roll in rolls ?? const <_ProductionRoll>[]) {
       roll.dispose();
@@ -721,7 +721,7 @@ class _ProductionEntryDialogState extends State<_ProductionEntryDialog> {
     setState(() {});
   }
 
-  void _addRoll(int jobId) {
+  void _addRoll(String jobId) {
     final rolls = _jobGroups[jobId];
     if (rolls == null) return;
 
@@ -738,7 +738,7 @@ class _ProductionEntryDialogState extends State<_ProductionEntryDialog> {
     });
   }
 
-  void _removeRoll(int jobId, int index) {
+  void _removeRoll(String jobId, int index) {
     final rolls = _jobGroups[jobId];
     if (rolls == null || rolls.length <= 1) return;
 
@@ -1225,12 +1225,12 @@ class _RollEntryRowState extends State<_RollEntryRow> {
       builder: (context, constraints) {
         final compact = constraints.maxWidth < 720;
 
-        final machineField = DropdownButtonFormField<int>(
+        final machineField = DropdownButtonFormField<String>(
           value: widget.roll.machineId,
           isExpanded: true,
           decoration: _fieldDecoration(label: 'Machine *'),
           items: widget.machines.map((machine) {
-            return DropdownMenuItem<int>(
+            return DropdownMenuItem<String>(
               value: machine.id,
               child: Text(
                 machine.machineNo,
@@ -1395,7 +1395,7 @@ class _RollEntryRowState extends State<_RollEntryRow> {
 }
 
 class _ProductionRoll {
-  int? machineId;
+  String? machineId;
   final TextEditingController rollNo;
   final TextEditingController weight = TextEditingController();
   final TextEditingController remarks = TextEditingController();

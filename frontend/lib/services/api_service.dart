@@ -670,7 +670,7 @@ class ApiService {
     required String fabricId,
     required double gsm,
     required double orderQuantity,
-    required List<int> machineIds,
+    required List<String> machineIds,
     List<JobYarnRequirement> yarns = const [],
   }) async {
     if (machineIds.isEmpty) {
@@ -784,7 +784,7 @@ class ApiService {
     required String fabricId,
     required double gsm,
     required double orderQuantity,
-    List<int> machineIds = const [],
+    List<String> machineIds = const [],
     List<JobYarnRequirement> yarns = const [],
   }) async {
     final uri = Uri.parse('$baseUrl/jobs/$id');
@@ -868,8 +868,8 @@ class ApiService {
   // ============================================================
 
   Future<void> changeJobMachine({
-    required int jobId,
-    required int newMachineId,
+    required String jobId,
+    required String newMachineId,
   }) async {
     final response = await http.put(
       Uri.parse('$baseUrl/jobs/change-machine/$jobId'),
@@ -1394,7 +1394,7 @@ class Fabric {
 // ============================================================
 
 class Machine {
-  final int id;
+  final String id;
   final String machineNo;
   final String status;
   final double rpm;
@@ -1418,7 +1418,7 @@ class Machine {
 
   factory Machine.fromJson(Map<String, dynamic> json) {
     return Machine(
-      id: _toInt(json['id']),
+      id: json['id']?.toString() ?? '',
       machineNo: json['machine_no']?.toString() ?? '',
       status: json['status']?.toString() ?? '',
       rpm: _toDouble(json['rpm']),
@@ -1541,16 +1541,16 @@ class JobYarnRequirement {
 // ============================================================
 
 class JobOrder {
-  // Keep the existing numeric id for Flutter-side maps/grouping.
-  // The backend UUID is kept separately for API references.
-  final int id;
+  // Canonical identity: the backend UUID is the only JobOrder ID.
+  // jobNo is a business/display number and must never be converted into an ID.
+  final String id;
   final String uuid;
   final String jobNo;
-  final int? fabricId;
+  final String? fabricId;
   final String fabricName;
   final String? partyId;
   final String partyName;
-  final int? machineId;
+  final String? machineId;
   final String machineNo;
   final double gsm;
   final double orderQuantity;
@@ -1589,26 +1589,18 @@ class JobOrder {
     final uuid =
         (json['uuid'] ?? json['job_id'] ?? json['id'])?.toString() ?? '';
 
-    final suppliedNumericId = _toInt(
-      json['numericId'] ??
-          json['numeric_id'] ??
-          json['numberId'] ??
-          json['number_id'],
-    );
-
     return JobOrder(
-      id: suppliedNumericId > 0
-          ? suppliedNumericId
-          : _jobNumberToInt(jobNo),
+      id: uuid,
+
       uuid: uuid,
       jobNo: jobNo,
-      fabricId: _toNullableInt(json['fabricId'] ?? json['fabric_id']),
+      fabricId: _toNullableString(json['fabricId'] ?? json['fabric_id']),
       fabricName:
           (json['fabricName'] ?? json['fabric_name'])?.toString() ?? '',
       partyId: _toNullableString(json['partyId'] ?? json['party_id']),
       partyName:
           (json['partyName'] ?? json['party_name'])?.toString() ?? '',
-      machineId: _toNullableInt(json['machineId'] ?? json['machine_id']),
+      machineId: _toNullableString(json['machineId'] ?? json['machine_id']),
       machineNo:
           (json['machineNo'] ??
                   json['machine_no'] ??
@@ -1661,7 +1653,7 @@ class JobOrder {
 
 class JobDetails {
   final JobOrder job;
-  final List<int> machineIds;
+  final List<String> machineIds;
   final List<JobYarnRequirement> yarns;
 
   const JobDetails({
@@ -1693,17 +1685,19 @@ class JobDetails {
 
     return JobDetails(
       job: job,
-      machineIds: rawMachines.map((item) {
-        if (item is Map) {
-          return _toInt(
-            item['machineId'] ??
-                item['machine_id'] ??
-                item['id'],
-          );
-        }
-
-        return _toInt(item);
-      }).where((id) => id > 0).toList(),
+      machineIds: rawMachines
+          .map((item) {
+            if (item is Map) {
+              return (item['machineId'] ??
+                      item['machine_id'] ??
+                      item['id'])
+                  ?.toString() ??
+                  '';
+            }
+            return item?.toString() ?? '';
+          })
+          .where((id) => id.trim().isNotEmpty)
+          .toList(),
       yarns: rawYarns.map((item) {
         final map = Map<String, dynamic>.from(item as Map);
 
@@ -1861,11 +1855,6 @@ int _toInt(dynamic value) {
         value?.toString() ?? '',
       ) ??
       0;
-}
-
-int _jobNumberToInt(String jobNo) {
-  final match = RegExp(r'(\d+)\s*$').firstMatch(jobNo);
-  return int.tryParse(match?.group(1) ?? '') ?? 0;
 }
 
 int? _toNullableInt(dynamic value) {
