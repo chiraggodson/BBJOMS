@@ -130,9 +130,12 @@ class _YarnPageState extends State<YarnPage> {
         (sum, row) => sum + (double.tryParse('${row['balance'] ?? 0}') ?? 0),
       );
 
-  int get _activeLots => _stock.where((row) {
-        return (double.tryParse('${row['balance'] ?? 0}') ?? 0) > 0;
-      }).length;
+  int get _activeLots => _stock
+      .where((row) => (double.tryParse('${row['balance'] ?? 0}') ?? 0) > 0)
+      .map((row) => '${row['yarn_lot_id'] ?? ''}')
+      .where((id) => id.isNotEmpty && id != 'null')
+      .toSet()
+      .length;
 
   int get _todayMovements {
     final today = DateTime.now();
@@ -253,26 +256,15 @@ class _YarnPageState extends State<YarnPage> {
   Widget build(BuildContext context) {
     final yarns = _filteredYarns;
 
-final ownersByYarn = <String, Set<String>>{};
+final stockByYarn = <String, double>{};
 
 for (final row in _stock) {
   final yarnId = '${row['yarn_id'] ?? ''}'.trim();
-  final owner =
-      '${row['owner_name'] ?? row['stock_owner_name'] ?? ''}'.trim();
+  final balance = double.tryParse('${row['balance'] ?? 0}') ?? 0;
 
-  if (yarnId.isEmpty || owner.isEmpty || owner == 'null') {
-    continue;
-  }
-
-  ownersByYarn
-      .putIfAbsent(yarnId, () => <String>{})
-      .add(owner);
+  if (yarnId.isEmpty || balance <= 0) continue;
+  stockByYarn[yarnId] = (stockByYarn[yarnId] ?? 0) + balance;
 }
-
-final ownerNamesByYarn = <String, String>{
-  for (final entry in ownersByYarn.entries)
-    entry.key: entry.value.join(', '),
-};
 
 return SingleChildScrollView(
 
@@ -353,6 +345,37 @@ return SingleChildScrollView(
           ),
           const SizedBox(height: 20),
           _DashboardCard(
+            title: 'Yarn Available on Hand',
+            child: _inventoryLoading
+                ? const Padding(
+                    padding: EdgeInsets.all(30),
+                    child: Center(child: CircularProgressIndicator()),
+                  )
+                : _inventoryError != null
+                    ? _ErrorState(
+                        message: _inventoryError!,
+                        onRetry: _loadInventoryData,
+                      )
+                    : _stock.isEmpty
+                        ? const Padding(
+                            padding: EdgeInsets.all(45),
+                            child: Column(
+                              children: [
+                                Icon(Icons.inventory_2_outlined,
+                                    size: 42, color: Color(0xFF53616D)),
+                                SizedBox(height: 12),
+                                Text(
+                                  'No yarn on hand',
+                                  style: TextStyle(
+                                      color: Color(0xFF9BA7B2), fontSize: 14),
+                                ),
+                              ],
+                            ),
+                          )
+                        : _YarnOnHandTable(stock: _stock),
+          ),
+          const SizedBox(height: 20),
+          _DashboardCard(
             title: 'Yarn Master',
             child: Column(
               children: [
@@ -419,11 +442,11 @@ return SingleChildScrollView(
                   )
                 else
                   _YarnTable(
-  yarns: yarns,
-  ownersByYarn: ownerNamesByYarn,
-  onEdit: (yarn) => _openYarnForm(yarn: yarn),
-  onDeactivate: _deactivateYarn,
-),
+                    yarns: yarns,
+                    stockByYarn: stockByYarn,
+                    onEdit: (yarn) => _openYarnForm(yarn: yarn),
+                    onDeactivate: _deactivateYarn,
+                  ),
               ],
             ),
           ),
@@ -514,6 +537,128 @@ class _LiveYarnSummary extends StatelessWidget {
   }
 }
 
+class _YarnOnHandTable extends StatelessWidget {
+  final List<Map<String, dynamic>> stock;
+
+  const _YarnOnHandTable({required this.stock});
+
+  String _v(Map<String, dynamic> row, String key) => '${row[key] ?? ''}'.trim();
+
+  @override
+  Widget build(BuildContext context) {
+    final rows = stock.where((row) {
+      return (double.tryParse(_v(row, 'balance')) ?? 0) > 0;
+    }).toList();
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        if (constraints.maxWidth < 900) {
+          return Column(
+            children: rows.map((row) {
+              final balance = double.tryParse(_v(row, 'balance')) ?? 0;
+              final yarn = _v(row, 'yarn_name');
+              final count = _v(row, 'yarn_count');
+              final composition = _v(row, 'composition');
+              final owner = _v(row, 'owner_name');
+              final lot = _v(row, 'lot_no');
+              final color = _v(row, 'color_name');
+              final location = _v(row, 'location_name');
+
+              return Container(
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                decoration: const BoxDecoration(
+                  border: Border(bottom: BorderSide(color: Color(0xFF1D2933))),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(yarn,
+                              style: const TextStyle(fontWeight: FontWeight.w700)),
+                        ),
+                        Text('${balance.toStringAsFixed(2)} kg',
+                            style: const TextStyle(
+                                color: BBTheme.green, fontWeight: FontWeight.w800)),
+                      ],
+                    ),
+                    const SizedBox(height: 5),
+                    Text([
+                      if (count.isNotEmpty) 'Count: $count',
+                      if (composition.isNotEmpty) 'Composition: $composition',
+                    ].join(' • '), style: const TextStyle(color: BBTheme.muted, fontSize: 11)),
+                    const SizedBox(height: 5),
+                    Text([
+                      if (owner.isNotEmpty) 'Owner: $owner',
+                      if (lot.isNotEmpty) 'Lot: $lot',
+                      if (color.isNotEmpty) 'Color: $color',
+                      if (location.isNotEmpty) 'Location: $location',
+                    ].join(' • '), style: const TextStyle(fontSize: 10.5)),
+                  ],
+                ),
+              );
+            }).toList(),
+          );
+        }
+
+        return Column(
+          children: [
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+              decoration: BoxDecoration(
+                color: BBTheme.black3,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: const Row(
+                children: [
+                  Expanded(flex: 4, child: Text('Yarn', style: _TableHeaderStyle.style)),
+                  Expanded(flex: 2, child: Text('Count', style: _TableHeaderStyle.style)),
+                  Expanded(flex: 3, child: Text('Composition', style: _TableHeaderStyle.style)),
+                  Expanded(flex: 3, child: Text('Owner', style: _TableHeaderStyle.style)),
+                  Expanded(flex: 2, child: Text('Lot No.', style: _TableHeaderStyle.style)),
+                  Expanded(flex: 2, child: Text('Color', style: _TableHeaderStyle.style)),
+                  Expanded(flex: 2, child: Text('Location', style: _TableHeaderStyle.style)),
+                  Expanded(flex: 2, child: Text('On Hand', style: _TableHeaderStyle.style)),
+                ],
+              ),
+            ),
+            ...rows.map((row) {
+              final balance = double.tryParse(_v(row, 'balance')) ?? 0;
+              return Container(
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+                decoration: const BoxDecoration(
+                  border: Border(bottom: BorderSide(color: Color(0xFF1D2933))),
+                ),
+                child: Row(
+                  children: [
+                    Expanded(flex: 4, child: Text(_v(row, 'yarn_name'), overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 12))),
+                    Expanded(flex: 2, child: Text(_v(row, 'yarn_count').isEmpty ? '—' : _v(row, 'yarn_count'),
+                        overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 12))),
+                    Expanded(flex: 3, child: Text(_v(row, 'composition').isEmpty ? '—' : _v(row, 'composition'),
+                        overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 12))),
+                    Expanded(flex: 3, child: Text(_v(row, 'owner_name').isEmpty ? '—' : _v(row, 'owner_name'),
+                        overflow: TextOverflow.ellipsis, style: const TextStyle(color: BBTheme.redLight, fontSize: 12, fontWeight: FontWeight.w600))),
+                    Expanded(flex: 2, child: Text(_v(row, 'lot_no').isEmpty ? '—' : _v(row, 'lot_no'),
+                        overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 12))),
+                    Expanded(flex: 2, child: Text(_v(row, 'color_name').isEmpty ? '—' : _v(row, 'color_name'),
+                        overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 12))),
+                    Expanded(flex: 2, child: Text(_v(row, 'location_name').isEmpty ? '—' : _v(row, 'location_name'),
+                        overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 12))),
+                    Expanded(flex: 2, child: Text('${balance.toStringAsFixed(2)} kg',
+                        overflow: TextOverflow.ellipsis, style: const TextStyle(color: BBTheme.green, fontSize: 12, fontWeight: FontWeight.w800))),
+                  ],
+                ),
+              );
+            }),
+          ],
+        );
+      },
+    );
+  }
+}
+
 class _YarnMovementList extends StatelessWidget {
   final List<Map<String, dynamic>> movements;
   final VoidCallback onViewAll;
@@ -526,14 +671,16 @@ class _YarnMovementList extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (movements.isEmpty) {
-      return Padding(
-        padding: const EdgeInsets.symmetric(vertical: 28),
+      return const Padding(
+        padding: EdgeInsets.symmetric(vertical: 28),
         child: Column(
-          children: const [
+          children: [
             Icon(Icons.swap_vert, size: 36, color: Color(0xFF53616D)),
             SizedBox(height: 10),
-            Text('No yarn movements recorded yet',
-                style: TextStyle(color: Color(0xFF71808D))),
+            Text(
+              'No yarn movements recorded yet',
+              style: TextStyle(color: Color(0xFF71808D)),
+            ),
           ],
         ),
       );
@@ -560,11 +707,13 @@ class _YarnMovementRowLive extends StatelessWidget {
 
   const _YarnMovementRowLive({required this.movement});
 
+  String _value(String key) => '${movement[key] ?? ''}'.trim();
+
   @override
   Widget build(BuildContext context) {
-    final type = '${movement['movement_type'] ?? ''}'.toUpperCase();
-    final inQty = double.tryParse('${movement['quantity_in'] ?? 0}') ?? 0;
-    final outQty = double.tryParse('${movement['quantity_out'] ?? 0}') ?? 0;
+    final type = _value('movement_type').toUpperCase();
+    final inQty = double.tryParse(_value('quantity_in')) ?? 0;
+    final outQty = double.tryParse(_value('quantity_out')) ?? 0;
     final isIn = inQty > 0 && outQty <= 0;
     final isReturn = type.contains('RETURN');
     final icon = isReturn
@@ -573,21 +722,27 @@ class _YarnMovementRowLive extends StatelessWidget {
             ? Icons.south_west
             : Icons.north_east;
     final title = type.isEmpty ? 'Yarn Movement' : type.replaceAll('_', ' ');
-    final job = '${movement['job_no'] ?? ''}'.trim();
-    final yarn = '${movement['yarn_name'] ?? ''}'.trim();
-    final owner = '${movement['owner_name'] ?? ''}'.trim();
-    final lot = '${movement['lot_no'] ?? ''}'.trim();
-    final location = '${movement['location_name'] ?? ''}'.trim();
+    final owner = _value('owner_name');
+    final yarn = _value('yarn_name');
+    final count = _value('yarn_count');
+    final composition = _value('composition');
+    final lot = _value('lot_no');
+    final color = _value('color_name');
+    final location = _value('location_name');
+    final job = _value('job_no');
     final qty = isIn ? inQty : outQty;
-    final timestamp = '${movement['created_at'] ?? movement['createdAt'] ?? movement['movement_date'] ?? ''}';
+    final timestamp = _value('created_at').isNotEmpty
+        ? _value('created_at')
+        : (_value('movement_date'));
     final date = _formatMovementDateTime(timestamp);
 
     return Container(
-      padding: const EdgeInsets.symmetric(vertical: 13),
+      padding: const EdgeInsets.symmetric(vertical: 14),
       decoration: const BoxDecoration(
         border: Border(bottom: BorderSide(color: Color(0xFF1D2933))),
       ),
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
           CircleAvatar(
             radius: 17,
@@ -597,37 +752,38 @@ class _YarnMovementRowLive extends StatelessWidget {
             child: Icon(
               icon,
               size: 17,
-              color: isIn || isReturn
-                  ? BBTheme.green
-                  : BBTheme.redLight,
+              color: isIn || isReturn ? BBTheme.green : BBTheme.redLight,
             ),
           ),
           const SizedBox(width: 12),
           Expanded(
+            flex: 5,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(title,
-                    style: const TextStyle(
-                        fontSize: 12, fontWeight: FontWeight.w700)),
-                const SizedBox(height: 3),
                 Text(
-                  [
-                    if (yarn.isNotEmpty) yarn,
-                    if (owner.isNotEmpty) owner,
-                    if (lot.isNotEmpty) 'Lot $lot',
-                    if (job.isNotEmpty) job,
-                    if (location.isNotEmpty) location,
-                  ].join(' • '),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                      color: Color(0xFF71808D), fontSize: 10.5),
+                  title,
+                  style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
+                ),
+                const SizedBox(height: 4),
+                Wrap(
+                  spacing: 10,
+                  runSpacing: 3,
+                  children: [
+                    if (owner.isNotEmpty) _MovementMeta('Owner', owner),
+                    if (yarn.isNotEmpty) _MovementMeta('Yarn', yarn),
+                    if (count.isNotEmpty) _MovementMeta('Count', count),
+                    if (composition.isNotEmpty) _MovementMeta('Composition', composition),
+                    if (lot.isNotEmpty) _MovementMeta('Lot', lot),
+                    if (color.isNotEmpty) _MovementMeta('Color', color),
+                    if (location.isNotEmpty) _MovementMeta('Location', location),
+                    if (job.isNotEmpty) _MovementMeta('Job', job),
+                  ],
                 ),
               ],
             ),
           ),
-          const SizedBox(width: 12),
+          const SizedBox(width: 14),
           Column(
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
@@ -636,17 +792,36 @@ class _YarnMovementRowLive extends StatelessWidget {
                 style: TextStyle(
                   fontSize: 12,
                   fontWeight: FontWeight.w800,
-                  color: isIn || isReturn
-                      ? BBTheme.green
-                      : BBTheme.redLight,
+                  color: isIn || isReturn ? BBTheme.green : BBTheme.redLight,
                 ),
               ),
               const SizedBox(height: 3),
-              Text(date,
-                  style: const TextStyle(
-                      color: Color(0xFF71808D), fontSize: 10)),
+              Text(
+                date,
+                style: const TextStyle(color: Color(0xFF71808D), fontSize: 10),
+              ),
             ],
           ),
+        ],
+      ),
+    );
+  }
+}
+
+class _MovementMeta extends StatelessWidget {
+  final String label;
+  final String value;
+
+  const _MovementMeta(this.label, this.value);
+
+  @override
+  Widget build(BuildContext context) {
+    return RichText(
+      text: TextSpan(
+        style: const TextStyle(color: Color(0xFF71808D), fontSize: 10.5),
+        children: [
+          TextSpan(text: '$label: ', style: const TextStyle(color: Color(0xFF53616D))),
+          TextSpan(text: value),
         ],
       ),
     );
@@ -1766,16 +1941,21 @@ class _YarnStatCard extends StatelessWidget {
 
 class _YarnTable extends StatelessWidget {
   final List<YarnMaster> yarns;
-  final Map<String, String> ownersByYarn;
+  final Map<String, double> stockByYarn;
   final ValueChanged<YarnMaster> onEdit;
   final ValueChanged<YarnMaster> onDeactivate;
 
   const _YarnTable({
     required this.yarns,
-    required this.ownersByYarn,
+    required this.stockByYarn,
     required this.onEdit,
     required this.onDeactivate,
   });
+
+  String _stock(String id) {
+    final value = stockByYarn[id] ?? 0;
+    return value <= 0 ? '—' : '${value.toStringAsFixed(2)} kg';
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -1784,92 +1964,49 @@ class _YarnTable extends StatelessWidget {
         if (constraints.maxWidth < 850) {
           return Column(
             children: yarns.map((yarn) {
+              final stock = stockByYarn[yarn.id] ?? 0;
               return Container(
-                padding: const EdgeInsets.symmetric(
-                  vertical: 14,
-                ),
+                padding: const EdgeInsets.symmetric(vertical: 14),
                 decoration: const BoxDecoration(
-                  border: Border(
-                    bottom: BorderSide(
-                      color: Color(0xFF1D2933),
-                    ),
-                  ),
+                  border: Border(bottom: BorderSide(color: Color(0xFF1D2933))),
                 ),
                 child: Row(
                   children: [
                     const CircleAvatar(
                       radius: 18,
                       backgroundColor: Color(0xFF153A38),
-                      child: Icon(
-                        Icons.all_inclusive,
-                        color: Color(0xFF00BFA6),
-                        size: 18,
-                      ),
+                      child: Icon(Icons.all_inclusive, color: Color(0xFF00BFA6), size: 18),
                     ),
                     const SizedBox(width: 12),
                     Expanded(
                       child: Column(
-                        crossAxisAlignment:
-                            CrossAxisAlignment.start,
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(
-                            yarn.name,
-                            style: const TextStyle(
-                              fontWeight: FontWeight.w600,
-                              fontSize: 13,
-                            ),
-                          ),
+                          Text(yarn.name, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
                           const SizedBox(height: 4),
-                          Text(
-                            '${yarn.code} • ${yarn.count.isEmpty ? 'No count' : yarn.count}',
-                            style: const TextStyle(
-                              color: Color(0xFF71808D),
-                              fontSize: 11,
-                            ),
-                          ),
+                          Text('${yarn.code} • Count: ${yarn.count.isEmpty ? '—' : yarn.count}',
+                              style: const TextStyle(color: Color(0xFF71808D), fontSize: 11)),
                           const SizedBox(height: 3),
+                          Text(yarn.composition.isEmpty ? 'Composition: —' : 'Composition: ${yarn.composition}',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(color: Color(0xFF5F6D78), fontSize: 10)),
+                          const SizedBox(height: 5),
                           Text(
-                            yarn.composition.isEmpty ? 'Composition not specified' : yarn.composition,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                              color: Color(0xFF5F6D78),
-                              fontSize: 10,
-                            ),
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            ownersByYarn[yarn.id]?.isNotEmpty == true
-                                ? 'Owner: ${ownersByYarn[yarn.id]}'
-                                : 'Owner: Not specified',
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                              color: BBTheme.redLight,
-                              fontSize: 10,
-                              fontWeight: FontWeight.w600,
-                            ),
+                            stock <= 0 ? 'On hand: —' : 'On hand: ${stock.toStringAsFixed(2)} kg',
+                            style: const TextStyle(color: BBTheme.green, fontSize: 10.5, fontWeight: FontWeight.w700),
                           ),
                         ],
                       ),
                     ),
                     PopupMenuButton<String>(
                       onSelected: (value) {
-                        if (value == 'edit') {
-                          onEdit(yarn);
-                        } else if (value == 'deactivate') {
-                          onDeactivate(yarn);
-                        }
+                        if (value == 'edit') onEdit(yarn);
+                        if (value == 'deactivate') onDeactivate(yarn);
                       },
                       itemBuilder: (_) => const [
-                        PopupMenuItem(
-                          value: 'edit',
-                          child: Text('Edit'),
-                        ),
-                        PopupMenuItem(
-                          value: 'deactivate',
-                          child: Text('Deactivate'),
-                        ),
+                        PopupMenuItem(value: 'edit', child: Text('Edit')),
+                        PopupMenuItem(value: 'deactivate', child: Text('Deactivate')),
                       ],
                     ),
                   ],
@@ -1882,159 +2019,70 @@ class _YarnTable extends StatelessWidget {
         return Column(
           children: [
             Container(
-              padding: const EdgeInsets.symmetric(
-                horizontal: 14,
-                vertical: 11,
-              ),
-              decoration: BoxDecoration(
-                color: BBTheme.black3,
-                borderRadius: BorderRadius.circular(8),
-              ),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+              decoration: BoxDecoration(color: BBTheme.black3, borderRadius: BorderRadius.circular(8)),
               child: const Row(
                 children: [
-                  Expanded(
-                    flex: 2,
-                    child: Text(
-                      'Yarn No.',
-                      style: _TableHeaderStyle.style,
-                    ),
-                  ),
-                  Expanded(
-                    flex: 4,
-                    child: Text(
-                      'Yarn',
-                      style: _TableHeaderStyle.style,
-                    ),
-                  ),
-                  Expanded(
-                    flex: 2,
-                    child: Text(
-                      'Count',
-                      style: _TableHeaderStyle.style,
-                    ),
-                  ),
-                  Expanded(
-                    flex: 3,
-                    child: Text(
-                      'Composition',
-                      style: _TableHeaderStyle.style,
-                    ),
-                  ),
-                  Expanded(
-                    flex: 3,
-                    child: Text(
-                      'Owner',
-                      style: _TableHeaderStyle.style,
-                    ),
-                  ),
+                  Expanded(flex: 2, child: Text('Yarn No.', style: _TableHeaderStyle.style)),
+                  Expanded(flex: 4, child: Text('Yarn', style: _TableHeaderStyle.style)),
+                  Expanded(flex: 2, child: Text('Count', style: _TableHeaderStyle.style)),
+                  Expanded(flex: 3, child: Text('Composition', style: _TableHeaderStyle.style)),
+                  Expanded(flex: 2, child: Text('On Hand', style: _TableHeaderStyle.style)),
                   SizedBox(width: 48),
                 ],
               ),
             ),
-            ...yarns.map(
-              (yarn) {
-                return Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 14,
-                    vertical: 14,
-                  ),
-                  decoration: const BoxDecoration(
-                    border: Border(
-                      bottom: BorderSide(
-                        color: Color(0xFF1D2933),
-                      ),
+            ...yarns.map((yarn) {
+              return Container(
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+                decoration: const BoxDecoration(
+                  border: Border(bottom: BorderSide(color: Color(0xFF1D2933))),
+                ),
+                child: Row(
+                  children: [
+                    Expanded(
+                      flex: 2,
+                      child: Text(yarn.code.isEmpty ? '—' : yarn.code,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(color: Color(0xFF9BA7B2), fontSize: 12, fontWeight: FontWeight.w600)),
                     ),
-                  ),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        flex: 2,
-                        child: Text(
-                          yarn.code.isEmpty ? '—' : yarn.code,
+                    Expanded(
+                      flex: 4,
+                      child: Text(yarn.name, overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 12)),
+                    ),
+                    Expanded(
+                      flex: 2,
+                      child: Text(yarn.count.isEmpty ? '—' : yarn.count,
                           overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            color: Color(0xFF9BA7B2),
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ),
-                      Expanded(
-                        flex: 4,
-                        child: Text(
-                          yarn.name,
+                          style: const TextStyle(color: Color(0xFF9BA7B2), fontSize: 12)),
+                    ),
+                    Expanded(
+                      flex: 3,
+                      child: Text(yarn.composition.isEmpty ? '—' : yarn.composition,
                           overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            fontWeight: FontWeight.w600,
-                            fontSize: 12,
-                          ),
-                        ),
-                      ),
-                      Expanded(
-                        flex: 2,
-                        child: Text(
-                          yarn.count.isEmpty
-                              ? '—'
-                              : yarn.count,
-                          style: const TextStyle(
-                            color: Color(0xFF9BA7B2),
-                            fontSize: 12,
-                          ),
-                        ),
-                      ),
-                      Expanded(
-                        flex: 3,
-                        child: Text(
-                          yarn.composition.isEmpty
-                              ? '—'
-                              : yarn.composition,
+                          style: const TextStyle(color: Color(0xFF9BA7B2), fontSize: 12)),
+                    ),
+                    Expanded(
+                      flex: 2,
+                      child: Text(_stock(yarn.id),
                           overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            color: Color(0xFF9BA7B2),
-                            fontSize: 12,
-                          ),
-                        ),
-                       
-                      ),
-                      Expanded(
-                        flex: 3,
-                        child: Text(
-                          ownersByYarn[yarn.id]?.isNotEmpty == true
-                              ? ownersByYarn[yarn.id]!
-                              : '—',
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            color: BBTheme.redLight,
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ),
-                      PopupMenuButton<String>(
-                        onSelected: (value) {
-                          if (value == 'edit') {
-                            onEdit(yarn);
-                          } else if (value ==
-                              'deactivate') {
-                            onDeactivate(yarn);
-                          }
-                        },
-                        itemBuilder: (_) => const [
-                          PopupMenuItem(
-                            value: 'edit',
-                            child: Text('Edit'),
-                          ),
-                          PopupMenuItem(
-                            value: 'deactivate',
-                            child: Text('Deactivate'),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                );
-              },
-            ),
+                          style: const TextStyle(color: BBTheme.green, fontSize: 12, fontWeight: FontWeight.w700)),
+                    ),
+                    PopupMenuButton<String>(
+                      onSelected: (value) {
+                        if (value == 'edit') onEdit(yarn);
+                        if (value == 'deactivate') onDeactivate(yarn);
+                      },
+                      itemBuilder: (_) => const [
+                        PopupMenuItem(value: 'edit', child: Text('Edit')),
+                        PopupMenuItem(value: 'deactivate', child: Text('Deactivate')),
+                      ],
+                    ),
+                  ],
+                ),
+              );
+            }),
           ],
         );
       },

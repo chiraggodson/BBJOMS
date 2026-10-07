@@ -15,6 +15,8 @@ const YARN_SELECT = `
     y.company_id,
     y.code,
     y.name,
+    y.count,
+    y.composition,
     y.yarn_type_id,
     COALESCE(yt.name, '') AS yarn_type_name,
     y.unit_id,
@@ -33,10 +35,9 @@ function mapYarn(row) {
     code: row.code || '',
     name: row.name || '',
     yarn_name: row.name || '',
-    // Compatibility fields for the current Flutter UI.
-    count: '',
-    yarn_count: '',
-    composition: '',
+    count: row.count || '',
+    yarn_count: row.count || '',
+    composition: row.composition || '',
     colour: '',
     yarn_type_id: row.yarn_type_id ? String(row.yarn_type_id) : null,
     yarn_type_name: row.yarn_type_name || '',
@@ -209,6 +210,8 @@ router.post('/', async (req, res) => {
   try {
     const code = clean(req.body?.code);
     const name = clean(req.body?.name);
+    const count = clean(req.body?.count ?? req.body?.yarn_count) || null;
+    const composition = clean(req.body?.composition) || null;
     const yarnTypeId = clean(req.body?.yarn_type_id);
     const unitId = clean(req.body?.unit_id);
     const description = clean(req.body?.description) || null;
@@ -222,11 +225,11 @@ router.post('/', async (req, res) => {
 
     const result = await pool.query(`
       INSERT INTO master.yarns(
-        company_id,code,name,yarn_type_id,unit_id,description,is_active
+        company_id,code,name,count,composition,yarn_type_id,unit_id,description,is_active
       )
-      VALUES($1,$2,$3,$4,$5,$6,true)
+      VALUES($1,$2,$3,$4,$5,$6,$7,$8,true)
       RETURNING id
-    `, [COMPANY_ID,code,name,yarnTypeId || null,unitId || null,description]);
+    `, [COMPANY_ID,code,name,count,composition,yarnTypeId || null,unitId || null,description]);
 
     const full = await pool.query(`
       ${YARN_SELECT}
@@ -251,6 +254,8 @@ router.put('/:id', async (req, res) => {
   try {
     const code = clean(req.body?.code);
     const name = clean(req.body?.name);
+    const count = clean(req.body?.count ?? req.body?.yarn_count) || null;
+    const composition = clean(req.body?.composition) || null;
     const yarnTypeId = clean(req.body?.yarn_type_id);
     const unitId = clean(req.body?.unit_id);
     const description = clean(req.body?.description) || null;
@@ -267,16 +272,18 @@ router.put('/:id', async (req, res) => {
       SET
         code=$1,
         name=$2,
-        yarn_type_id=$3,
-        unit_id=$4,
-        description=$5,
-        is_active=$6,
+        count=$3,
+        composition=$4,
+        yarn_type_id=$5,
+        unit_id=$6,
+        description=$7,
+        is_active=$8,
         updated_at=NOW()
-      WHERE id=$7
-        AND (company_id=$8 OR company_id IS NULL)
+      WHERE id=$9
+        AND (company_id=$10 OR company_id IS NULL)
       RETURNING id
     `, [
-      code,name,yarnTypeId || null,unitId || null,description,
+      code,name,count,composition,yarnTypeId || null,unitId || null,description,
       req.body?.is_active !== false,req.params.id,COMPANY_ID
     ]);
 
