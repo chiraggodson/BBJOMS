@@ -93,7 +93,7 @@ class YarnReceiptApi {
   final http.Client _client;
 
   YarnReceiptApi({
-    this.baseUrl = 'http://192.168.1.20:4000/api',
+    this.baseUrl = 'http://192.168.29.6:4000/api',
     http.Client? client,
   }) : _client = client ?? http.Client();
 
@@ -252,6 +252,40 @@ class YarnReceiptApi {
             ))
         .where((l) => l.id.isNotEmpty && l.name.isNotEmpty)
         .toList();
+  }
+
+  // ------------------------------------------------------------
+  // Create an inventory location.
+  // ------------------------------------------------------------
+  Future<YarnReceiptLocation> createLocation({
+    required String code,
+    required String name,
+    required String type,
+    String? companyId,
+  }) async {
+    final r = await _client.post(
+      Uri.parse('$baseUrl/yarn-receipts/locations'),
+      headers: const {'Content-Type': 'application/json'},
+      body: jsonEncode({
+        'code': code.trim(),
+        'name': name.trim(),
+        'location_type': type.trim(),
+        if (companyId != null && companyId.trim().isNotEmpty)
+          'company_id': companyId.trim(),
+      }),
+    );
+
+    _check(r);
+    final decoded = jsonDecode(r.body);
+    if (decoded is Map<String, dynamic>) {
+      final location = decoded['location'];
+      if (location is Map) {
+        return YarnReceiptLocation.fromJson(
+          Map<String, dynamic>.from(location),
+        );
+      }
+    }
+    throw Exception('Location was saved, but the server returned an unexpected response.');
   }
 
   // ------------------------------------------------------------

@@ -175,6 +175,78 @@ router.get('/locations', async (req,res) => {
   }
 });
 
+// Create inventory location
+router.post('/locations', async (req,res) => {
+  try {
+    const companyId = clean(req.body?.company_id) || COMPANY_ID;
+    const code = clean(req.body?.code).toUpperCase();
+    const name = clean(req.body?.name);
+    const locationType = clean(req.body?.location_type || req.body?.type || 'STORAGE').toUpperCase();
+
+    if (!isUuid(companyId)) {
+      return res.status(400).json({success:false,error:'A valid company is required.'});
+    }
+    if (!code || !name) {
+      return res.status(400).json({success:false,error:'Location code and name are required.'});
+    }
+    if (!/^[A-Z0-9_-]+$/.test(code)) {
+      return res.status(400).json({success:false,error:'Location code may contain only letters, numbers, underscores, and hyphens.'});
+    }
+    if (!['STORAGE','PRODUCTION','DISPATCH','OTHER'].includes(locationType)) {
+      return res.status(400).json({success:false,error:'Invalid location type.'});
+    }
+
+    const company = await pool.query(`
+      SELECT id
+      FROM core.companies
+      WHERE id=$1 AND COALESCE(is_active,true)=true
+      LIMIT 1
+    `,[companyId]);
+
+    if (!company.rows.length) {
+      return res.status(400).json({success:false,error:'Company not found or inactive.'});
+    }
+
+    const duplicate = await pool.query(`
+      SELECT id,code,name
+      FROM master.locations
+      WHERE company_id=$1
+        AND (
+          LOWER(TRIM(code))=LOWER(TRIM($2))
+          OR LOWER(TRIM(name))=LOWER(TRIM($3))
+        )
+      LIMIT 1
+    `,[companyId,code,name]);
+
+    if (duplicate.rows.length) {
+      return res.status(409).json({
+        success:false,
+        error:'A location with this code or name already exists.',
+        existing:duplicate.rows[0]
+      });
+    }
+
+    const result = await pool.query(`
+      INSERT INTO master.locations(
+        company_id,code,name,location_type,is_active
+      )
+      VALUES($1,$2,$3,$4,true)
+      RETURNING id,company_id,code,name,floor_id,parent_location_id,location_type,is_active,created_at
+    `,[companyId,code,name,locationType]);
+
+    return res.status(201).json({success:true,location:result.rows[0]});
+  } catch (error) {
+    console.error('Create inventory location failed:',error);
+    return res.status(error.code === '23505' ? 409 : 500).json({
+      success:false,
+      error:error.code === '23505'
+        ? 'Location code already exists.'
+        : 'Failed to create location.',
+      details:error.message
+    });
+  }
+});
+
 // ------------------------------------------------------------
 // Receipt list
 // ------------------------------------------------------------

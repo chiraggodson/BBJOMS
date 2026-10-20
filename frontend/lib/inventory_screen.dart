@@ -169,7 +169,16 @@ for (final key in ['location_name', 'location']) {
           row['date'] ??
           row['created_at'];
 
-      if (_isToday(date)) {
+
+
+          if (_isToday(date)) {
+final movementQuantity =
+    incoming ? row['quantity_in'] : row['quantity_out'];
+
+if (movementQuantity != null) {
+  total += _number(movementQuantity);
+}
+else {
         for (final key in [
           'quantity',
           'qty',
@@ -184,8 +193,23 @@ for (final key in ['location_name', 'location']) {
         }
       }
     }
+    }
 
     return total;
+  }
+
+  Future<void> _addLocation() async {
+    final created = await showDialog<YarnReceiptLocation>(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => _AddLocationDialog(api: _api),
+    );
+
+    if (!mounted || created == null) return;
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Location "${created.name}" created successfully.')),
+    );
   }
 
   Future<void> _receiveYarn() async {
@@ -240,6 +264,12 @@ for (final key in ['location_name', 'location']) {
                   tooltip: 'Refresh',
                   onPressed: _loading ? null : _load,
                   icon: const Icon(Icons.refresh),
+                ),
+                const SizedBox(width: 8),
+                OutlinedButton.icon(
+                  onPressed: _addLocation,
+                  icon: const Icon(Icons.add_location_alt_outlined, size: 18),
+                  label: const Text('Add Location'),
                 ),
                 const SizedBox(width: 8),
                 FilledButton.icon(
@@ -701,6 +731,179 @@ class _ErrorBanner extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+/* ============================================================
+   ADD INVENTORY LOCATION
+   ============================================================ */
+
+class _AddLocationDialog extends StatefulWidget {
+  final YarnReceiptApi api;
+
+  const _AddLocationDialog({required this.api});
+
+  @override
+  State<_AddLocationDialog> createState() => _AddLocationDialogState();
+}
+
+class _AddLocationDialogState extends State<_AddLocationDialog> {
+  final _formKey = GlobalKey<FormState>();
+  final _code = TextEditingController();
+  final _name = TextEditingController();
+
+  String _type = 'STORAGE';
+  bool _saving = false;
+  String? _error;
+
+  @override
+  void dispose() {
+    _code.dispose();
+    _name.dispose();
+    super.dispose();
+  }
+
+  Future<void> _save() async {
+    if (!_formKey.currentState!.validate()) return;
+
+    setState(() {
+      _saving = true;
+      _error = null;
+    });
+
+    try {
+      final location = await widget.api.createLocation(
+        code: _code.text.trim().toUpperCase(),
+        name: _name.text.trim(),
+        type: _type,
+      );
+
+      if (!mounted) return;
+      Navigator.of(context).pop(location);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _saving = false;
+        _error = e.toString().replaceFirst('Exception: ', '');
+      });
+    }
+  }
+
+  InputDecoration _decoration(String label) => InputDecoration(
+        labelText: label,
+        border: const OutlineInputBorder(),
+        isDense: true,
+      );
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      backgroundColor: _panel,
+      title: const Text('Add Inventory Location'),
+      content: SizedBox(
+        width: 430,
+        child: Form(
+          key: _formKey,
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (_error != null) ...[
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(12),
+                    margin: const EdgeInsets.only(bottom: 14),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF3A171A),
+                      borderRadius: BorderRadius.circular(5),
+                      border: Border.all(color: const Color(0xFF7F1D1D)),
+                    ),
+                    child: Text(
+                      _error!,
+                      style: const TextStyle(color: Colors.white),
+                    ),
+                  ),
+                ],
+                TextFormField(
+                  controller: _name,
+                  enabled: !_saving,
+                  decoration: _decoration('Location Name *'),
+                  textCapitalization: TextCapitalization.words,
+                  validator: (value) => (value == null || value.trim().isEmpty)
+                      ? 'Enter a location name.'
+                      : null,
+                ),
+                const SizedBox(height: 14),
+                TextFormField(
+                  controller: _code,
+                  enabled: !_saving,
+                  decoration: _decoration('Location Code *'),
+                  textCapitalization: TextCapitalization.characters,
+                  validator: (value) {
+                    final code = value?.trim() ?? '';
+                    if (code.isEmpty) return 'Enter a location code.';
+                    if (!RegExp(r'^[A-Za-z0-9_-]+$').hasMatch(code)) {
+                      return 'Use only letters, numbers, _ or -.';
+                    }
+                    return null;
+                  },
+                ),
+                const SizedBox(height: 14),
+                DropdownButtonFormField<String>(
+                  value: _type,
+                  isExpanded: true,
+                  decoration: _decoration('Location Type *'),
+                  items: const [
+                    DropdownMenuItem(
+                      value: 'STORAGE',
+                      child: Text('Storage'),
+                    ),
+                    DropdownMenuItem(
+                      value: 'PRODUCTION',
+                      child: Text('Production Floor'),
+                    ),
+                    DropdownMenuItem(
+                      value: 'DISPATCH',
+                      child: Text('Dispatch'),
+                    ),
+                    DropdownMenuItem(
+                      value: 'OTHER',
+                      child: Text('Other'),
+                    ),
+                  ],
+                  onChanged: _saving
+                      ? null
+                      : (value) {
+                          if (value != null) setState(() => _type = value);
+                        },
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: _saving ? null : () => Navigator.of(context).pop(),
+          child: const Text('Cancel'),
+        ),
+        FilledButton.icon(
+          onPressed: _saving ? null : _save,
+          icon: _saving
+              ? const SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : const Icon(Icons.check),
+          label: Text(_saving ? 'Saving...' : 'Save Location'),
+          style: FilledButton.styleFrom(
+            backgroundColor: _accent,
+            foregroundColor: Colors.white,
+          ),
+        ),
+      ],
     );
   }
 }
