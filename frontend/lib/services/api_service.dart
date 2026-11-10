@@ -898,6 +898,41 @@ class ApiService {
   }
 
   // ============================================================
+  Future<List<Map<String, dynamic>>> getReturnableYarn(String jobId) async {
+    final response = await http.get(Uri.parse('$baseUrl/job-materials/$jobId/returnable-yarn'));
+    final data = _tryDecode(response.body);
+    if (response.statusCode != 200 || data is! Map || data['success'] != true) {
+      throw ApiException(_extractError(data, 'Failed to load returnable yarn'), response.statusCode);
+    }
+    return (data['lines'] as List? ?? [])
+        .whereType<Map>()
+        .map((row) => Map<String, dynamic>.from(row))
+        .toList();
+  }
+
+  Future<void> postYarnReturn(String jobId, List<Map<String, dynamic>> lines) async {
+    final response = await http.post(
+      Uri.parse('$baseUrl/job-materials/$jobId/yarn-return'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({'lines': lines}),
+    );
+    final data = _tryDecode(response.body);
+    if (response.statusCode != 201 || data is! Map || data['success'] != true) {
+      throw ApiException(_extractError(data, 'Failed to post yarn return'), response.statusCode);
+    }
+  }
+
+  Future<void> recordSettingCloth(String jobId, double quantityKg, {String? notes}) async {
+    final response = await http.post(
+      Uri.parse('$baseUrl/job-materials/$jobId/setting-cloth'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({'quantity_kg': quantityKg, 'notes': notes}),
+    );
+    final data = _tryDecode(response.body);
+    if (response.statusCode != 201 || data is! Map || data['success'] != true) {
+      throw ApiException(_extractError(data, 'Failed to record setting cloth'), response.statusCode);
+    }
+  }
   // JOB YARN HISTORY
   // ============================================================
 

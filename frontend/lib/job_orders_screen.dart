@@ -1066,12 +1066,87 @@ class _JobTable extends StatelessWidget {
   }
 }
 
-class _JobDetailsDialog extends StatelessWidget {
+class _JobDetailsDialog extends StatefulWidget {
   final JobDetails details;
 
-  const _JobDetailsDialog({
-    required this.details,
-  });
+  const _JobDetailsDialog({required this.details});
+
+  @override
+  State<_JobDetailsDialog> createState() => _JobDetailsDialogState();
+}
+
+class _JobDetailsDialogState extends State<_JobDetailsDialog> {
+  final ApiService _api = ApiService();
+  JobDetails get details => widget.details;
+
+  Future<void> _addYarnReturn(JobOrder job) async {
+    try {
+      final lines = await _api.getReturnableYarn(job.id);
+      if (!mounted) return;
+      if (lines.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('There is no unreturned issued yarn for this job.')));
+        return;
+      }
+      final controllers = <String, TextEditingController>{};
+      for (final line in lines) { controllers['${line['issue_line_id']}'] = TextEditingController(); }
+      var saving = false;
+      final posted = await showDialog<bool>(context: context, builder: (dialogContext) => StatefulBuilder(builder: (context, setDialogState) => AlertDialog(
+        title: Text('Yarn Return • ${job.jobNo}'),
+        content: SizedBox(width: 520, child: SingleChildScrollView(child: Column(mainAxisSize: MainAxisSize.min, children: [
+          const Align(alignment: Alignment.centerLeft, child: Text('Enter quantities to return. Yarn returns to its original stock location.')),
+          const SizedBox(height: 14),
+          ...lines.map((line) { final id = '${line['issue_line_id']}'; return Padding(padding: const EdgeInsets.only(bottom: 12), child: Row(children: [
+            Expanded(child: Text('${line['yarn_name']} • ${line['lot_no']}\nAvailable ${line['available_kg']} kg', style: const TextStyle(fontSize: 12))),
+            const SizedBox(width: 12), SizedBox(width: 120, child: TextField(controller: controllers[id], keyboardType: const TextInputType.numberWithOptions(decimal: true), decoration: const InputDecoration(labelText: 'Return kg'))),
+          ])); }),
+        ]))),
+        actions: [
+          TextButton(onPressed: saving ? null : () => Navigator.pop(dialogContext, false), child: const Text('Cancel')),
+          FilledButton(onPressed: saving ? null : () async {
+            final entries = <Map<String, dynamic>>[];
+            for (final line in lines) { final id = '${line['issue_line_id']}'; final qty = double.tryParse(controllers[id]!.text.trim()) ?? 0; if (qty > 0) entries.add({'issue_line_id': id, 'quantity_kg': qty}); }
+            if (entries.isEmpty) { ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Enter at least one return quantity.'))); return; }
+            setDialogState(() => saving = true);
+            try { await _api.postYarnReturn(job.id, entries); if (dialogContext.mounted) Navigator.pop(dialogContext, true); }
+            catch (e) { setDialogState(() => saving = false); if (dialogContext.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e'))); }
+          }, child: Text(saving ? 'Posting…' : 'Post Return')),
+        ],
+      )));
+      for (final controller in controllers.values) { controller.dispose(); }
+      if (posted == true && mounted) Navigator.pop(context, true);
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Could not load returnable yarn: $e')));
+    }
+  }
+
+  Future<void> _addSettingCloth(JobOrder job) async {
+    final quantity = TextEditingController();
+    final notes = TextEditingController();
+    var saving = false;
+    final saved = await showDialog<bool>(context: context, builder: (dialogContext) => StatefulBuilder(builder: (context, setDialogState) => AlertDialog(
+      title: Text('Add Setting Cloth • ${job.jobNo}'),
+      content: SizedBox(width: 440, child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+        const Text('Record setup cloth returned to the customer. Yarn use follows the job yarn percentages; production kilograms and knitting charges are unchanged.'),
+        const SizedBox(height: 14),
+        TextField(controller: quantity, keyboardType: const TextInputType.numberWithOptions(decimal: true), decoration: const InputDecoration(labelText: 'Setting cloth weight (kg)')),
+        const SizedBox(height: 10),
+        TextField(controller: notes, decoration: const InputDecoration(labelText: 'Notes (optional)')),
+      ])),
+      actions: [
+        TextButton(onPressed: saving ? null : () => Navigator.pop(dialogContext, false), child: const Text('Cancel')),
+        FilledButton(onPressed: saving ? null : () async {
+          final qty = double.tryParse(quantity.text.trim()) ?? 0;
+          if (qty <= 0) { ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Enter a weight greater than zero.'))); return; }
+          setDialogState(() => saving = true);
+          try { await _api.recordSettingCloth(job.id, qty, notes: notes.text.trim()); if (dialogContext.mounted) Navigator.pop(dialogContext, true); }
+          catch (e) { setDialogState(() => saving = false); if (dialogContext.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e'))); }
+        }, child: Text(saving ? 'Saving…' : 'Save Setting Cloth')),
+      ],
+    )));
+    quantity.dispose();
+    notes.dispose();
+    if (saved == true && mounted) Navigator.pop(context, true);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -1243,6 +1318,18 @@ class _JobDetailsDialog extends StatelessWidget {
               ],
             ),
           ),
+          OutlinedButton.icon(
+            onPressed: () => _addYarnReturn(job),
+            icon: const Icon(Icons.keyboard_return, size: 16),
+            label: const Text('Yarn Return'),
+          ),
+          const SizedBox(width: 8),
+          OutlinedButton.icon(
+            onPressed: () => _addSettingCloth(job),
+            icon: const Icon(Icons.add, size: 16),
+            label: const Text('Setting Cloth'),
+          ),
+          const SizedBox(width: 10),
           _Status(job.status),
           const SizedBox(width: 10),
           IconButton(

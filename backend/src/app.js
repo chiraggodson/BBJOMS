@@ -9,6 +9,7 @@ const fabricRoutes = require('./routes/fabric.routes');
 const machineRoutes = require('./routes/machine.routes');
 const yarnRoutes = require('./routes/yarn.routes');
 const yarnReceiptRoutes = require('./routes/yarn_receipt.routes');
+const jobMaterialRoutes = require('./routes/job_material.routes');
 
 app.use(cors());
 app.use(express.json());
@@ -48,6 +49,7 @@ app.get('/api/health/database', async (req, res) => {
 
 app.use('/api/parties', partyRoutes);
 app.use('/api/jobs', jobRoutes);
+app.use('/api/job-materials', jobMaterialRoutes);
 app.use('/api/fabrics', fabricRoutes);
 app.use('/api/machines', machineRoutes);
 app.use('/api/yarns', yarnRoutes);

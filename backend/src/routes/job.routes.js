@@ -61,6 +61,22 @@ async function getJobById(client, id) {
     ORDER BY created_at, id
   `, [jobId]);
 
+  const issuedYarn = await client.query(`
+    SELECT yarn_id, GREATEST(SUM(quantity_kg-returned_kg),0) AS issued_kg
+    FROM (
+      SELECT yil.yarn_id, yil.quantity_kg,
+        COALESCE((SELECT SUM(rl.quantity_kg)
+          FROM jobwork.yarn_return_lines rl
+          JOIN jobwork.yarn_returns rr ON rr.id=rl.return_id
+          WHERE rl.issue_line_id=yil.id AND rr.status='POSTED'),0) AS returned_kg
+      FROM jobwork.yarn_issues yi
+      JOIN jobwork.yarn_issue_lines yil ON yil.issue_id=yi.id
+      WHERE yi.job_order_id=$1 AND yi.status='POSTED'
+    ) issued_lines
+    GROUP BY yarn_id
+  `, [jobId]);
+  const issuedByYarnId = new Map(issuedYarn.rows.map(y => [String(y.yarn_id), Number(y.issued_kg || 0)]));
+
   const yarnIds = [...new Set(yarnLinks.rows.map(y => String(y.yarn_id)).filter(Boolean))];
   let yarnMaster = [];
   if (yarnIds.length) {
@@ -109,7 +125,7 @@ async function getJobById(client, id) {
     yarns:yarns.map(y=>({
       id:String(y.id), yarnId:String(y.yarn_id), jobOrderId:String(y.job_order_id),
       yarnName:y.yarn_name, yarnCount:y.yarn_count, requirementPercent:y.requirement_percent == null ? null : Number(y.requirement_percent),
-      requiredKg:Number(y.required_kg || 0), issuedKg:0, returnedKg:0, wasteKg:0
+      requiredKg:Number(y.required_kg || 0), issuedKg:issuedByYarnId.get(String(y.yarn_id)) || 0, returnedKg:0, wasteKg:0
     })),
     production:production.rows.map(r=>({
       id:String(r.id), jobOrderId:String(r.job_order_id), machineId:r.machine_id ? String(r.machine_id):null,

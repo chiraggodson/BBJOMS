@@ -514,7 +514,7 @@ router.post('/issue-batch', async (req,res) => {
           WHERE yl.id=$1
             AND yl.company_id=$2
             AND COALESCE(yl.is_active,true)=true
-          FOR SHARE
+          FOR SHARE OF yl,y
         `,[line.yarnLotId,COMPANY_ID]);
 
         if (!lot.rows.length) {
