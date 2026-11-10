@@ -309,7 +309,7 @@ router.get('/stock', async (req,res) => {
     const result = await pool.query(`
       SELECT
         yl.id AS yarn_lot_id,
-        yl.lot_no,
+        COALESCE(NULLIF(yl.supplier_lot_no,''), yl.lot_no) AS lot_no,
         yl.supplier_lot_no,
         yl.received_date,
         yl.company_id,
