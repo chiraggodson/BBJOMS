@@ -1,9 +1,11 @@
 import 'dart:convert';
 
-import 'package:http/http.dart' as http;
+import '../app_config.dart';
+
+import 'api_http.dart';
 
 class ApiService {
-  static const String baseUrl = 'http://192.168.1.69:4000/api';
+  static const String baseUrl = AppConfig.apiBaseUrl;
 
   // ============================================================
   // PARTIES
@@ -32,7 +34,7 @@ class ApiService {
       queryParameters: queryParameters,
     );
 
-    final response = await http.get(uri);
+    final response = await ApiHttp.get(uri);
 
     if (response.statusCode != 200) {
       throw ApiException(
@@ -64,7 +66,7 @@ class ApiService {
   Future<Party> getParty(String id) async {
     final uri = Uri.parse('$baseUrl/parties/$id');
 
-    final response = await http.get(uri);
+    final response = await ApiHttp.get(uri);
     final data = _decodeMap(response.body);
 
     if (response.statusCode != 200 || data['success'] != true) {
@@ -82,7 +84,7 @@ class ApiService {
   Future<PartyStats> getPartyStats() async {
     final uri = Uri.parse('$baseUrl/parties/stats');
 
-    final response = await http.get(uri);
+    final response = await ApiHttp.get(uri);
 
     if (response.statusCode != 200) {
       throw ApiException(
@@ -144,7 +146,7 @@ class ApiService {
       'notes': notes,
     };
 
-    final response = await http.post(
+    final response = await ApiHttp.post(
       uri,
       headers: {'Content-Type': 'application/json'},
       body: jsonEncode(body),
@@ -204,7 +206,7 @@ class ApiService {
       'notes': notes,
     };
 
-    final response = await http.put(
+    final response = await ApiHttp.put(
       uri,
       headers: {'Content-Type': 'application/json'},
       body: jsonEncode(body),
@@ -227,7 +229,7 @@ class ApiService {
   Future<void> deactivateParty(String id) async {
     final uri = Uri.parse('$baseUrl/parties/$id');
 
-    final response = await http.delete(uri);
+    final response = await ApiHttp.delete(uri);
     final data = _decodeMap(response.body);
 
     if (response.statusCode != 200 || data['success'] != true) {
@@ -243,7 +245,7 @@ class ApiService {
   // ============================================================
 
   Future<List<Fabric>> getFabrics() async {
-    final response = await http.get(
+    final response = await ApiHttp.get(
       Uri.parse('$baseUrl/fabrics'),
     );
 
@@ -277,7 +279,7 @@ class ApiService {
   // ============================================================
 
   Future<List<Machine>> getMachines() async {
-    final response = await http.get(
+    final response = await ApiHttp.get(
       Uri.parse('$baseUrl/machines'),
     );
 
@@ -311,7 +313,7 @@ class ApiService {
   // ============================================================
 
   Future<List<YarnMaster>> getYarns() async {
-    final response = await http.get(
+    final response = await ApiHttp.get(
       Uri.parse('$baseUrl/yarns'),
     );
 
@@ -350,7 +352,7 @@ class ApiService {
     int? unitId,
     String? description,
   }) async {
-    final response = await http.post(
+    final response = await ApiHttp.post(
       Uri.parse('$baseUrl/yarns'),
       headers: {'Content-Type': 'application/json'},
       body: jsonEncode({
@@ -391,7 +393,7 @@ class ApiService {
     String? description,
     bool isActive = true,
   }) async {
-    final response = await http.put(
+    final response = await ApiHttp.put(
       Uri.parse('$baseUrl/yarns/$id'),
       headers: {'Content-Type': 'application/json'},
       body: jsonEncode({
@@ -422,7 +424,7 @@ class ApiService {
   }
 
   Future<void> deactivateYarn(String id) async {
-    final response = await http.delete(
+    final response = await ApiHttp.delete(
       Uri.parse('$baseUrl/yarns/$id'),
     );
 
@@ -460,7 +462,7 @@ class ApiService {
       queryParameters: queryParameters,
     );
 
-    final response = await http.get(uri);
+    final response = await ApiHttp.get(uri);
 
     if (response.statusCode != 200) {
       throw ApiException(
@@ -556,7 +558,7 @@ class ApiService {
   // ============================================================
 
   Future<void> deleteJob(String id) async {
-    final response = await http.delete(
+    final response = await ApiHttp.delete(
       Uri.parse('$baseUrl/jobs/$id'),
     );
 
@@ -582,7 +584,7 @@ class ApiService {
   // ============================================================
 
   Future<JobOrder> getJob(String jobNo) async {
-    final response = await http.get(
+    final response = await ApiHttp.get(
       Uri.parse('$baseUrl/jobs/$jobNo'),
     );
 
@@ -620,7 +622,7 @@ class ApiService {
   // ============================================================
 
   Future<JobDetails> getJobDetails(String id) async {
-    final response = await http.get(
+    final response = await ApiHttp.get(
       Uri.parse('$baseUrl/jobs/$id'),
     );
 
@@ -695,6 +697,7 @@ class ApiService {
               'yarn_name': yarn.yarnName,
               'yarn_count': yarn.yarnCount,
               'required_kg': yarn.quantity,
+              'requirement_percent': yarn.requirementPercent,
               // Compatibility with older route revisions.
               'quantity': yarn.quantity,
             },
@@ -702,7 +705,7 @@ class ApiService {
           .toList(),
     };
 
-    final response = await http.post(
+    final response = await ApiHttp.post(
       uri,
       headers: {'Content-Type': 'application/json'},
       body: jsonEncode(body),
@@ -802,12 +805,13 @@ class ApiService {
               'yarn_name': yarn.yarnName,
               'yarn_count': yarn.yarnCount,
               'required_kg': yarn.quantity,
+              'requirement_percent': yarn.requirementPercent,
             },
           )
           .toList(),
     };
 
-    final response = await http.put(
+    final response = await ApiHttp.put(
       uri,
       headers: {'Content-Type': 'application/json'},
       body: jsonEncode(body),
@@ -840,7 +844,7 @@ class ApiService {
   // ============================================================
 
   Future<void> closeJob(String jobNo) async {
-    final response = await http.put(
+    final response = await ApiHttp.put(
       Uri.parse('$baseUrl/jobs/close/$jobNo'),
       headers: {'Content-Type': 'application/json'},
     );
@@ -871,7 +875,7 @@ class ApiService {
     required String jobId,
     required String newMachineId,
   }) async {
-    final response = await http.put(
+    final response = await ApiHttp.put(
       Uri.parse('$baseUrl/jobs/change-machine/$jobId'),
       headers: {'Content-Type': 'application/json'},
       body: jsonEncode({
@@ -898,8 +902,16 @@ class ApiService {
   }
 
   // ============================================================
+  Future<Map<String, dynamic>> getReportOverview() async {
+    final response = await ApiHttp.get(Uri.parse('$baseUrl/reports/overview'));
+    final data = _tryDecode(response.body);
+    if (response.statusCode != 200 || data is! Map || data['success'] != true || data['summary'] is! Map) {
+      throw ApiException(_extractError(data, 'Failed to load reports'), response.statusCode);
+    }
+    return Map<String, dynamic>.from(data['summary'] as Map);
+  }
   Future<List<Map<String, dynamic>>> getReturnableYarn(String jobId) async {
-    final response = await http.get(Uri.parse('$baseUrl/job-materials/$jobId/returnable-yarn'));
+    final response = await ApiHttp.get(Uri.parse('$baseUrl/job-materials/$jobId/returnable-yarn'));
     final data = _tryDecode(response.body);
     if (response.statusCode != 200 || data is! Map || data['success'] != true) {
       throw ApiException(_extractError(data, 'Failed to load returnable yarn'), response.statusCode);
@@ -911,7 +923,7 @@ class ApiService {
   }
 
   Future<void> postYarnReturn(String jobId, List<Map<String, dynamic>> lines) async {
-    final response = await http.post(
+    final response = await ApiHttp.post(
       Uri.parse('$baseUrl/job-materials/$jobId/yarn-return'),
       headers: {'Content-Type': 'application/json'},
       body: jsonEncode({'lines': lines}),
@@ -923,7 +935,7 @@ class ApiService {
   }
 
   Future<void> recordSettingCloth(String jobId, double quantityKg, {String? notes}) async {
-    final response = await http.post(
+    final response = await ApiHttp.post(
       Uri.parse('$baseUrl/job-materials/$jobId/setting-cloth'),
       headers: {'Content-Type': 'application/json'},
       body: jsonEncode({'quantity_kg': quantityKg, 'notes': notes}),
@@ -939,7 +951,7 @@ class ApiService {
   Future<List<JobYarnHistory>> getJobYarnHistory(
     String jobNo,
   ) async {
-    final response = await http.get(
+    final response = await ApiHttp.get(
       Uri.parse('$baseUrl/jobs/$jobNo/yarn-history'),
     );
 
@@ -987,7 +999,7 @@ class ApiService {
   Future<List<JobProductionHistory>> getJobProductionHistory(
     String jobNo,
   ) async {
-    final response = await http.get(
+    final response = await ApiHttp.get(
       Uri.parse('$baseUrl/jobs/$jobNo/production-history'),
     );
 
@@ -1039,7 +1051,7 @@ Future<Fabric> createFabric({
   String? composition,
   double? widthInches,
 }) async {
-  final response = await http.post(
+  final response = await ApiHttp.post(
     Uri.parse('$baseUrl/fabrics'),
     headers: {
       'Content-Type': 'application/json',
@@ -1082,7 +1094,7 @@ Future<Fabric> updateFabric({
   double? widthInches,
   bool isActive = true,
 }) async {
-  final response = await http.put(
+  final response = await ApiHttp.put(
     Uri.parse('$baseUrl/fabrics/$id'),
     headers: {
       'Content-Type': 'application/json',
@@ -1117,7 +1129,7 @@ Future<Fabric> updateFabric({
 }
 
 Future<void> deactivateFabric(String id) async {
-  final response = await http.delete(
+  final response = await ApiHttp.delete(
     Uri.parse('$baseUrl/fabrics/$id'),
   );
 
@@ -1150,7 +1162,7 @@ Future<void> deactivateFabric(String id) async {
   // ============================================================
 
   Future<List<ColorMaster>> getColors() async {
-    final response = await http.get(
+    final response = await ApiHttp.get(
       Uri.parse('$baseUrl/yarns/colors'),
     );
 
@@ -1173,7 +1185,7 @@ Future<void> deactivateFabric(String id) async {
     required String name,
     String? description,
   }) async {
-    final response = await http.post(
+    final response = await ApiHttp.post(
       Uri.parse('$baseUrl/yarns/colors'),
       headers: {'Content-Type': 'application/json'},
       body: jsonEncode({
@@ -1201,7 +1213,7 @@ Future<void> deactivateFabric(String id) async {
     String? description,
     bool isActive = true,
   }) async {
-    final response = await http.put(
+    final response = await ApiHttp.put(
       Uri.parse('$baseUrl/yarns/colors/$id'),
       headers: {'Content-Type': 'application/json'},
       body: jsonEncode({
@@ -1557,6 +1569,7 @@ class JobYarnRequirement {
   final String yarnCount;
   final double? quantity;
   final double? issuedQuantity;
+  final double? requirementPercent;
 
   const JobYarnRequirement({
     required this.yarnId,
@@ -1564,6 +1577,7 @@ class JobYarnRequirement {
     this.yarnCount = '',
     this.quantity,
     this.issuedQuantity,
+    this.requirementPercent,
   });
 
   double get balanceQuantity {
@@ -1762,6 +1776,11 @@ class JobDetails {
                   : map['required_kg'] != null
                       ? _toDouble(map['required_kg'])
                       : null,
+          requirementPercent: map['requirementPercent'] != null
+              ? _toDouble(map['requirementPercent'])
+              : map['requirement_percent'] != null
+                  ? _toDouble(map['requirement_percent'])
+                  : null,
           issuedQuantity: map['issuedQuantity'] != null
               ? _toDouble(map['issuedQuantity'])
               : map['issued_quantity'] != null

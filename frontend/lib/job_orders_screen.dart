@@ -2077,6 +2077,7 @@ class _NewJobOrderDialogState extends State<_NewJobOrderDialog> {
             yarnName: item.yarn!.yarnName.trim(),
             yarnCount: item.yarn!.yarnCount.trim(),
             quantity: item.quantity,
+            requirementPercent: item.percentage,
           );
         },
       ).toList();
@@ -2859,9 +2860,10 @@ class _EditJobOrderDialogState
         if (master == null) continue;
 
         final requiredKg = required.quantity ?? 0;
-        final percentage = job.orderQuantity > 0
-            ? requiredKg / job.orderQuantity * 100
-            : null;
+        final percentage = required.requirementPercent ??
+            (job.orderQuantity > 0
+                ? requiredKg / job.orderQuantity * 100
+                : null);
 
         selectedYarns.add(
           _SelectedJobYarn(
@@ -2973,6 +2975,7 @@ class _EditJobOrderDialogState
               yarnName: item.yarn!.yarnName.trim(),
               yarnCount: item.yarn!.yarnCount.trim(),
               quantity: item.quantity,
+            requirementPercent: item.percentage,
             ),
           )
           .toList();

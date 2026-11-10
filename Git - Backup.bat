@@ -1,76 +1,83 @@
 @echo off
+setlocal DisableDelayedExpansion
 title BBJOMS - Git Backup
 cd /d "%~dp0"
+if errorlevel 1 exit /b 1
 
 echo.
 echo ==========================================
 echo          BBJOMS Git Backup
 echo ==========================================
 echo.
-
-echo [1/4] Checking Git status...
+echo Current changes:
 echo.
-git status
+git status --short
+if errorlevel 1 exit /b 1
 
 echo.
-echo ==========================================
+echo Staging changes so they can be reviewed:
+git add -A
+if errorlevel 1 (
+    echo ERROR: Git could not stage the changes.
+    pause
+    exit /b 1
+)
+
+echo.
+echo Files staged for commit:
+echo.
+git diff --cached --name-only
+if errorlevel 1 exit /b 1
+
+echo.
+git diff --cached --stat
+if errorlevel 1 exit /b 1
+
+echo.
+set /p "confirm=Commit the staged files shown above? (Y/N): "
+if /I not "%confirm%"=="Y" (
+    echo.
+    echo No commit created. Staged files remain available for review.
+    pause
+    exit /b 0
+)
+
+echo.
 set /p "msg=Enter commit message: "
-
 if "%msg%"=="" (
-    echo.
     echo ERROR: Commit message cannot be empty.
-    echo.
     pause
     exit /b 1
 )
 
-echo.
-echo [2/4] Adding changes...
-git add .
-
-if errorlevel 1 (
-    echo.
-    echo ERROR: Git add failed.
-    echo.
-    pause
-    exit /b 1
-)
-
-echo.
-echo [3/4] Creating commit...
 git commit -m "%msg%"
-
 if errorlevel 1 (
     echo.
-    echo ERROR: Git commit failed.
-    echo.
+    echo Commit failed. Review the Git message above.
     pause
     exit /b 1
 )
 
 echo.
-echo [4/4] Pushing to GitHub...
+set /p "pushConfirm=Push this commit to the remote repository? (Y/N): "
+if /I not "%pushConfirm%"=="Y" (
+    echo.
+    echo Commit saved locally. Nothing was pushed.
+    git status --short
+    pause
+    exit /b 0
+)
+
 git push
-
 if errorlevel 1 (
     echo.
-    echo ==========================================
-    echo ERROR: Push failed.
-    echo ==========================================
-    echo.
+    echo Push failed. Your local commit remains saved.
     pause
     exit /b 1
 )
 
 echo.
-echo ==========================================
-echo       BACKUP COMPLETED SUCCESSFULLY
-echo ==========================================
+echo Backup completed successfully.
 echo.
-echo Your BBJOMS changes are now pushed to GitHub.
-echo.
-
-git status
-
-echo.
+git status --short
 pause

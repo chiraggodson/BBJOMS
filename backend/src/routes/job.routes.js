@@ -1,8 +1,9 @@
 const express = require('express');
 const { pool } = require('../db');
 const router = express.Router();
+const { validateYarnMix, sameYarnMix } = require('../domain/job_validation');
 
-const COMPANY_ID = '37c8cd03-c8ae-48cd-b8e4-cb3e864f042f';
+const { COMPANY_ID } = require('../config');
 
 function cleanString(v) { return v == null ? '' : String(v).trim(); }
 function toNumber(v, fallback = 0) {
@@ -11,6 +12,7 @@ function toNumber(v, fallback = 0) {
   return Number.isFinite(n) ? n : fallback;
 }
 function uuid(v) { return String(v || ''); }
+
 
 async function getJobById(client, id) {
   const result = await client.query(`
@@ -226,7 +228,9 @@ router.post('/',async(req,res)=>{
   const gsm=toNumber(b.gsm);
   if(!partyId||!fabricId||qty<=0||gsm<=0)return res.status(400).json({success:false,error:'Party, fabric, GSM and order quantity are required'});
   const machines=Array.isArray(b.machines??b.machine_ids??b.machineIds)?(b.machines??b.machine_ids??b.machineIds):[];
-  const yarns=Array.isArray(b.yarns)?b.yarns:[];
+  const yarns=b.yarns===undefined?[]:b.yarns;
+  const yarnError=validateYarnMix(yarns);
+  if(yarnError)return res.status(400).json({success:false,error:yarnError});
   const client=await pool.connect();
   try{
     await client.query('BEGIN');
@@ -236,6 +240,7 @@ router.post('/',async(req,res)=>{
     if(!party.rows.length)throw new Error('Selected party does not exist');
     const fabric=await client.query(`SELECT id FROM master.fabrics WHERE id=$1 AND company_id=$2 AND is_active`,[fabricId,COMPANY_ID]);
     if(!fabric.rows.length)throw new Error('Selected fabric does not exist');
+    await client.query('SELECT pg_advisory_xact_lock(hashtext($1))',['JOB_ORDER:'+COMPANY_ID]);
     const number=await client.query(`SELECT COALESCE(MAX(CAST(NULLIF(SUBSTRING(job_no FROM '^BBJO-([0-9]+)$'),'') AS INTEGER)),0)+1 next_no FROM jobwork.job_orders WHERE company_id=$1`,[COMPANY_ID]);
     const jobNo=`BBJO-${String(Number(number.rows[0].next_no)).padStart(5,'0')}`;
     const inserted=await client.query(`
@@ -273,20 +278,47 @@ await client.query(
       const percent=y.requirement_percent??y.requirementPercent;
       await client.query(`INSERT INTO jobwork.job_order_yarns(job_order_id,yarn_id,requirement_percent,required_kg) VALUES($1,$2,$3,$4)`,[jobId,yarnId,percent===''||percent==null?null:Number(percent),required]);
     }
+    const savedJob=await getJobById(client,jobId);
     await client.query('COMMIT');
-    res.status(201).json({success:true,job:await getJobById(pool,jobId)});
+    res.status(201).json({success:true,job:savedJob});
   }catch(e){await client.query('ROLLBACK');console.error('Create job failed:',e);res.status(500).json({success:false,error:e.message});}
   finally{client.release();}
 });
 
 router.put('/:id',async(req,res)=>{
+  const b=req.body||{};
+  if(b.yarns!==undefined){
+    const yarnError=validateYarnMix(b.yarns);
+    if(yarnError)return res.status(400).json({success:false,error:yarnError});
+  }
   const client=await pool.connect();
   try{
     await client.query('BEGIN');
     const id=req.params.id;
-    const exists=await client.query(`SELECT id FROM jobwork.job_orders WHERE id=$1 AND company_id=$2 FOR UPDATE`,[id,COMPANY_ID]);
+    const exists=await client.query(`SELECT id,order_quantity_kg FROM jobwork.job_orders WHERE id=$1 AND company_id=$2 FOR UPDATE`,[id,COMPANY_ID]);
     if(!exists.rows.length){await client.query('ROLLBACK');return res.status(404).json({success:false,error:'Job order not found'});}
-    const b=req.body||{};
+    let updateYarns=b.yarns!==undefined;
+    const requestedOrder=b.order_quantity??b.orderQuantity;
+    if(updateYarns||requestedOrder!=null){
+      const activity=await client.query(`
+        SELECT EXISTS(SELECT 1 FROM jobwork.yarn_issues WHERE job_order_id=$1 AND status='POSTED')
+          OR EXISTS(SELECT 1 FROM jobwork.setting_cloth_entries WHERE job_order_id=$1) AS locked
+      `,[id]);
+      if(activity.rows[0].locked){
+        const orderChanged=requestedOrder!=null&&Math.abs(Number(requestedOrder)-Number(exists.rows[0].order_quantity_kg))>0.001;
+        let mixChanged=false;
+        if(updateYarns){
+          const currentYarns=await client.query(`SELECT yarn_id,requirement_percent,required_kg FROM jobwork.job_order_yarns WHERE job_order_id=$1`,[id]);
+          mixChanged=!sameYarnMix(currentYarns.rows,b.yarns,exists.rows[0].order_quantity_kg);
+        }
+        if(orderChanged||mixChanged){
+          await client.query('ROLLBACK');
+          return res.status(409).json({success:false,error:'Yarn requirements and order quantity cannot be changed after yarn has been issued or setting cloth recorded.'});
+        }
+        updateYarns=false;
+      }
+    }
+
     await client.query(`
       UPDATE jobwork.job_orders SET job_date=COALESCE($1::date,job_date),party_id=COALESCE($2,party_id),
       fabric_id=COALESCE($3,fabric_id),design_no=COALESCE(NULLIF($4,''),design_no),
@@ -306,11 +338,13 @@ router.put('/:id',async(req,res)=>{
         await client.query(`INSERT INTO jobwork.job_order_machines(job_order_id,machine_id,is_primary) VALUES($1,$2,false) ON CONFLICT DO NOTHING`,[id,check.rows[0].id]);
       }
     }
-    if(b.yarns!==undefined){
+    if(updateYarns){
       await client.query(`DELETE FROM jobwork.job_order_yarns WHERE job_order_id=$1`,[id]);
       for(const y of b.yarns){const yarnId=uuid(y.yarn_id??y.yarnId);const required=toNumber(y.required_kg??y.requiredKg);if(yarnId&&required>0)await client.query(`INSERT INTO jobwork.job_order_yarns(job_order_id,yarn_id,requirement_percent,required_kg) VALUES($1,$2,$3,$4)`,[id,yarnId,y.requirement_percent??y.requirementPercent??null,required]);}
     }
-    await client.query('COMMIT');res.json({success:true,job:await getJobById(pool,id)});
+    const savedJob=await getJobById(client,id);
+    await client.query('COMMIT');
+    res.json({success:true,job:savedJob});
   }catch(e){await client.query('ROLLBACK');console.error('Update job failed:',e);res.status(500).json({success:false,error:e.message});}
   finally{client.release();}
 });
@@ -324,7 +358,8 @@ router.delete('/:id',async(req,res)=>{
     if(!j.rows.length){await client.query('ROLLBACK');return res.status(404).json({success:false,error:'Job order not found'});}
     const posted=await client.query(`SELECT 1 FROM jobwork.yarn_issues WHERE job_order_id=$1 AND status='POSTED' LIMIT 1`,[id]);
     const prod=await client.query(`SELECT 1 FROM production.fabric_production WHERE job_order_id=$1 AND status='POSTED' LIMIT 1`,[id]);
-    if(posted.rows.length||prod.rows.length){await client.query('ROLLBACK');return res.status(409).json({success:false,error:`${j.rows[0].job_no} cannot be deleted after posted yarn issue or production.`});}
+    const settingCloth=await client.query(`SELECT 1 FROM jobwork.setting_cloth_entries WHERE job_order_id=$1 LIMIT 1`,[id]);
+    if(posted.rows.length||prod.rows.length||settingCloth.rows.length){await client.query('ROLLBACK');return res.status(409).json({success:false,error:`${j.rows[0].job_no} cannot be deleted after yarn or production activity.`});}
     await client.query(`DELETE FROM jobwork.job_order_machines WHERE job_order_id=$1`,[id]);
     await client.query(`DELETE FROM jobwork.job_order_yarns WHERE job_order_id=$1`,[id]);
     await client.query(`DELETE FROM jobwork.job_orders WHERE id=$1`,[id]);
@@ -334,28 +369,41 @@ router.delete('/:id',async(req,res)=>{
 });
 
 router.post('/:id/production',async(req,res)=>{
+  const b=req.body||{};
+  const jobId=req.params.id;
+  const machineId=b.machine_id??b.machineId;
+  const qty=toNumber(b.quantity_kg??b.quantityKg);
+  if(!machineId||qty<=0)return res.status(400).json({success:false,error:'Machine and positive quantity_kg are required'});
+  const client=await pool.connect();
+  let inTransaction=false;
   try{
-    const b=req.body||{}, jobId=req.params.id;
-    const machineId=b.machine_id??b.machineId, qty=toNumber(b.quantity_kg??b.quantityKg);
-    if(!machineId||qty<=0)return res.status(400).json({success:false,error:'Machine and quantity_kg are required'});
-    const job=await pool.query(`SELECT id FROM jobwork.job_orders WHERE id=$1 AND company_id=$2`,[jobId,COMPANY_ID]);
-    if(!job.rows.length)return res.status(404).json({success:false,error:'Job order not found'});
-    const prod=await pool.query(`
+    await client.query('BEGIN');
+    inTransaction=true;
+    const job=await client.query(`SELECT id FROM jobwork.job_orders WHERE id=$1 AND company_id=$2 FOR UPDATE`,[jobId,COMPANY_ID]);
+    if(!job.rows.length){await client.query('ROLLBACK');inTransaction=false;return res.status(404).json({success:false,error:'Job order not found'});}
+    const machine=await client.query(`SELECT id FROM master.machines WHERE id=$1 AND company_id=$2 AND is_active=true`,[machineId,COMPANY_ID]);
+    if(!machine.rows.length){await client.query('ROLLBACK');inTransaction=false;return res.status(400).json({success:false,error:'Machine not found or inactive'});}
+    const prod=await client.query(`
       INSERT INTO production.fabric_production(company_id,financial_year_id,job_order_id,machine_id,production_date,status,notes)
       SELECT $1,fy.id,$2,$3,COALESCE($4::date,CURRENT_DATE),'POSTED',$5
       FROM core.financial_years fy WHERE fy.company_id=$1 AND fy.is_current AND NOT fy.is_closed
       RETURNING id
     `,[COMPANY_ID,jobId,machineId,b.production_date??b.productionDate??null,cleanString(b.remarks)]);
-    if(!prod.rows.length)return res.status(400).json({success:false,error:'No open financial year'});
-    const roll=await pool.query(`
+    if(!prod.rows.length)throw new Error('No open financial year');
+    const roll=await client.query(`
       INSERT INTO production.fabric_production_rolls(production_id,roll_no,gross_weight_kg,tare_weight_kg,net_weight_kg,meters,width_inches,gsm,remarks)
       VALUES($1,$2,$3,0,$3,$4,$5,$6,$7)
       RETURNING id,roll_no,net_weight_kg
     `,[prod.rows[0].id,cleanString(b.roll_no??b.rollNo)||null,qty,toNumber(b.meters),b.width_inches??b.widthInches??null,b.gsm??null,cleanString(b.remarks)||null]);
+    await client.query('COMMIT');
+    inTransaction=false;
     res.status(201).json({success:true,production:roll.rows[0]});
-  }catch(e){console.error('Add production failed:',e);res.status(500).json({success:false,error:e.message});}
+  }catch(e){
+    if(inTransaction)await client.query('ROLLBACK').catch(()=>{});
+    console.error('Add production failed:',e);
+    res.status(500).json({success:false,error:e.message});
+  }finally{client.release();}
 });
-
 router.post('/production-batch',async(req,res)=>{
   const entries=Array.isArray(req.body?.entries)?req.body.entries:[];
   if(!entries.length)return res.status(400).json({success:false,error:'At least one production roll is required'});
@@ -365,6 +413,10 @@ router.post('/production-batch',async(req,res)=>{
     for(const b of entries){
       const jobId=b.job_id??b.jobId,machineId=b.machine_id??b.machineId,qty=toNumber(b.quantity_kg??b.quantityKg);
       if(!jobId||!machineId||qty<=0)throw new Error('Each production line needs job, machine and quantity');
+      const job=await client.query(`SELECT id FROM jobwork.job_orders WHERE id=$1 AND company_id=$2 FOR UPDATE`,[jobId,COMPANY_ID]);
+      if(!job.rows.length)throw new Error('Job order not found');
+      const machine=await client.query(`SELECT id FROM master.machines WHERE id=$1 AND company_id=$2 AND is_active=true`,[machineId,COMPANY_ID]);
+      if(!machine.rows.length)throw new Error('Machine not found or inactive');
       const prod=await client.query(`
         INSERT INTO production.fabric_production(company_id,financial_year_id,job_order_id,machine_id,production_date,status,notes)
         SELECT $1,fy.id,$2,$3,COALESCE($4::date,CURRENT_DATE),'POSTED',$5

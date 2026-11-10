@@ -3,7 +3,7 @@ const express = require('express');
 const router = express.Router();
 const { pool } = require('../db');
 
-const COMPANY_ID = '37c8cd03-c8ae-48cd-b8e4-cb3e864f042f';
+const { COMPANY_ID } = require('../config');
 
 function clean(value) {
   return value == null ? '' : String(value).trim();

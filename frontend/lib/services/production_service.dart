@@ -1,10 +1,12 @@
 
 import 'dart:convert';
 
-import 'package:http/http.dart' as http;
+import '../app_config.dart';
+
+import 'api_http.dart';
 
 class ProductionService {
-  static const String baseUrl = 'http://192.168.1.69:4000/api';
+  static const String baseUrl = AppConfig.apiBaseUrl;
 
   Future<void> addProductionBatch({
     required List<Map<String, dynamic>> entries,
@@ -13,7 +15,7 @@ class ProductionService {
       throw Exception('At least one production roll is required.');
     }
 
-    final response = await http.post(
+    final response = await ApiHttp.post(
       Uri.parse('$baseUrl/jobs/production-batch'),
       headers: const {
         'Content-Type': 'application/json',
@@ -54,7 +56,7 @@ class ProductionService {
     required double quantityKg,
     String? remarks,
   }) async {
-    final response = await http.post(
+    final response = await ApiHttp.post(
       Uri.parse('$baseUrl/jobs/$jobId/production'),
       headers: const {
         'Content-Type': 'application/json',

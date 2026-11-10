@@ -10,9 +10,22 @@ const machineRoutes = require('./routes/machine.routes');
 const yarnRoutes = require('./routes/yarn.routes');
 const yarnReceiptRoutes = require('./routes/yarn_receipt.routes');
 const jobMaterialRoutes = require('./routes/job_material.routes');
+const reportRoutes = require('./routes/reports.routes');
 
-app.use(cors());
-app.use(express.json());
+const allowedOrigins = new Set(
+  (process.env.CORS_ORIGINS || 'http://localhost:3000,http://127.0.0.1:3000,http://192.168.1.69:3000')
+    .split(',')
+    .map(origin => origin.trim())
+    .filter(Boolean)
+);
+
+app.use(cors({
+  origin(origin, callback) {
+    if (!origin || allowedOrigins.has(origin)) return callback(null, true);
+    return callback(new Error('Origin is not allowed by CORS'));
+  },
+}));
+app.use(express.json({ limit: '1mb' }));
 
 app.get('/api/health', (req, res) => {
   res.json({
@@ -50,6 +63,7 @@ app.get('/api/health/database', async (req, res) => {
 app.use('/api/parties', partyRoutes);
 app.use('/api/jobs', jobRoutes);
 app.use('/api/job-materials', jobMaterialRoutes);
+app.use('/api/reports', reportRoutes);
 app.use('/api/fabrics', fabricRoutes);
 app.use('/api/machines', machineRoutes);
 app.use('/api/yarns', yarnRoutes);

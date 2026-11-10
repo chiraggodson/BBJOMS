@@ -1,7 +1,7 @@
 const express = require('express');
 const { pool } = require('../db');
 const router = express.Router();
-const COMPANY_ID = '37c8cd03-c8ae-48cd-b8e4-cb3e864f042f';
+const { COMPANY_ID } = require('../config');
 
 function clean(v) { return v == null ? '' : String(v).trim(); }
 function num(v) { const n = Number(v); return Number.isFinite(n) ? n : 0; }
@@ -79,6 +79,8 @@ router.post('/:jobId/setting-cloth', async (req,res) => {
     if (!fy.rows.length) throw new Error('No open financial year exists.');
     const recipe = await client.query(`SELECT yarn_id,requirement_percent FROM jobwork.job_order_yarns WHERE job_order_id=$1 ORDER BY created_at,id`, [req.params.jobId]);
     if (!recipe.rows.length) throw new Error('This job order has no yarn percentages to calculate setting cloth consumption.');
+    const mixTotal = recipe.rows.reduce((sum, yarn) => sum + num(yarn.requirement_percent), 0);
+    if (recipe.rows.some(yarn => num(yarn.requirement_percent) <= 0) || Math.abs(mixTotal - 100) > 0.01) throw new Error('Setting cloth requires a valid job yarn mix totaling 100%.');
     const entry = await client.query(`INSERT INTO jobwork.setting_cloth_entries(company_id,financial_year_id,job_order_id,quantity_kg,notes) VALUES($1,$2,$3,$4,$5) RETURNING id`, [COMPANY_ID,fy.rows[0].id,req.params.jobId,quantity,clean(req.body?.notes)||null]);
     for (const yarn of recipe.rows) {
       const percent = num(yarn.requirement_percent);

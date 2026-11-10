@@ -1,0 +1,10 @@
+\set ON_ERROR_STOP on
+\echo 'Creating a fresh BBJOMS 2.0 database schema'
+\ir "Backups/New folder/001.sql"
+\ir "Backups/New folder/002.sql"
+\ir "Backups/New folder/003.sql"
+\ir "Backups/New folder/004.sql"
+\ir "Backups/New folder/005.sql"
+\ir "migrations/006_yarn_return_and_setting_cloth.sql"
+\ir "Backups/New folder/008.sql"
+\echo 'Fresh BBJOMS schema is ready'

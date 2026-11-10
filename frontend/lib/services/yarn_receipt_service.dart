@@ -1,4 +1,5 @@
 import 'dart:convert';
+import '../app_config.dart';
 import 'package:http/http.dart' as http;
 
 
@@ -88,14 +89,26 @@ class YarnReceiptLocation {
   }
 }
 
+class _TimeoutClient extends http.BaseClient {
+  final http.Client _inner;
+
+  _TimeoutClient(this._inner);
+
+  @override
+  Future<http.StreamedResponse> send(http.BaseRequest request) =>
+      _inner.send(request).timeout(const Duration(seconds: 20));
+
+  @override
+  void close() => _inner.close();
+}
 class YarnReceiptApi {
   final String baseUrl;
   final http.Client _client;
 
   YarnReceiptApi({
-    this.baseUrl = 'http://192.168.1.69:4000/api',
+    this.baseUrl = AppConfig.apiBaseUrl,
     http.Client? client,
-  }) : _client = client ?? http.Client();
+  }) : _client = _TimeoutClient(client ?? http.Client());
 
 
   // ------------------------------------------------------------

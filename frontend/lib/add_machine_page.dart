@@ -1,6 +1,8 @@
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
+
+import 'app_config.dart';
 import 'app_theme.dart';
 import 'package:http/http.dart' as http;
 
@@ -28,7 +30,7 @@ class AddMachinePage extends StatefulWidget {
 }
 
 class _AddMachinePageState extends State<AddMachinePage> {
-  static const String _baseUrl = 'http://192.168.1.69:4000/api';
+  static const String _baseUrl = AppConfig.apiBaseUrl;
 
   final _formKey = GlobalKey<FormState>();
 
