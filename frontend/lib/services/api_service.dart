@@ -308,6 +308,31 @@ class ApiService {
         .toList();
   }
 
+  Future<Machine> updateMachineStatus({
+    required String id,
+    required String status,
+  }) async {
+    final response = await ApiHttp.patch(
+      Uri.parse('$baseUrl/machines/$id/status'),
+      headers: const {'Content-Type': 'application/json'},
+      body: jsonEncode({'status': status}),
+    );
+
+    final decoded = _tryDecode(response.body);
+    if (response.statusCode != 200 ||
+        decoded is! Map ||
+        decoded['success'] != true ||
+        decoded['machine'] is! Map) {
+      throw ApiException(
+        _extractError(decoded, 'Failed to update machine status'),
+        response.statusCode,
+      );
+    }
+
+    return Machine.fromJson(
+      Map<String, dynamic>.from(decoded['machine'] as Map),
+    );
+  }
   // ============================================================
   // YARNS
   // ============================================================

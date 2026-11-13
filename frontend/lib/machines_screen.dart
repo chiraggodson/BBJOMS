@@ -10,6 +10,32 @@ const _border = BBTheme.border;
 const _muted = BBTheme.muted;
 const _accent = BBTheme.red;
 
+const _machineStatuses = <String>[
+  'IDLE',
+  'RUNNING',
+  'PAUSED',
+  'MAINTENANCE',
+  'OFFLINE',
+];
+
+enum _MachineDetailsAction { edit, statusChanged }
+
+String _canonicalMachineStatus(String status) {
+  final normalized = status.trim().toUpperCase();
+  if (normalized == 'STOPPED' || normalized == 'STOP') return 'OFFLINE';
+  if (normalized == 'AVAILABLE') return 'IDLE';
+  return _machineStatuses.contains(normalized) ? normalized : 'IDLE';
+}
+
+String _machineStatusLabel(String status) => switch (status) {
+      'IDLE' => 'Idle',
+      'RUNNING' => 'Running',
+      'PAUSED' => 'Paused',
+      'MAINTENANCE' => 'Maintenance',
+      'OFFLINE' => 'Offline',
+      _ => status,
+    };
+
 class _Card extends StatelessWidget {
   final String title;
   final String? action;
@@ -137,11 +163,12 @@ class _Status extends StatelessWidget {
       c = BBTheme.green;
     } else if (normalized == 'yarn needed' ||
         normalized == 'low stock' ||
-        normalized == 'error') {
+        normalized == 'error' ||
+        normalized == 'offline' ||
+        normalized == 'stopped') {
       c = const Color(0xFFF87171);
     } else if (normalized == 'paused' ||
         normalized == 'pending' ||
-        normalized == 'stopped' ||
         normalized == 'idle' ||
         normalized == 'maintenance') {
       c = const Color(0xFFFBBF24);
@@ -294,23 +321,96 @@ class _MachinesPageState extends State<MachinesPage> {
     return _machines.where((machine) {
       final status = machine.status.trim().toLowerCase();
 
-      return status == 'idle' ||
-          status == 'stopped' ||
-          status == 'paused';
+      return status == 'idle';
     }).length;
   }
 
   Future<void> _showMachineDetails(Machine machine) async {
-  final result = await showDialog<bool>(
-    context: context,
-    builder: (_) => _MachineDetails(machine: machine),
-  );
+    final action = await showDialog<_MachineDetailsAction>(
+      context: context,
+      builder: (_) => _MachineDetails(
+        machine: machine,
+        onChangeStatus: _changeMachineStatus,
+      ),
+    );
 
-  if (result == true && mounted) {
-    await _loadMachines();
+    if (!mounted) return;
+
+    if (action == _MachineDetailsAction.edit) {
+      final result = await Navigator.of(context).push<bool>(
+        MaterialPageRoute(
+          builder: (_) => AddMachinePage(machine: machine),
+        ),
+      );
+      if (result == true && mounted) await _loadMachines();
+    } else if (action == _MachineDetailsAction.statusChanged) {
+      await _loadMachines();
+    }
   }
-}
 
+  Future<bool> _changeMachineStatus(Machine machine) async {
+    final currentStatus = _canonicalMachineStatus(machine.status);
+    var selectedStatus = currentStatus;
+
+    final status = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          backgroundColor: _panel,
+          title: Text('Update ${machine.machineNo} status'),
+          content: DropdownButtonFormField<String>(
+            value: selectedStatus,
+            decoration: const InputDecoration(labelText: 'Machine status'),
+            dropdownColor: _panel,
+            items: _machineStatuses
+                .map(
+                  (value) => DropdownMenuItem(
+                    value: value,
+                    child: Text(_machineStatusLabel(value)),
+                  ),
+                )
+                .toList(),
+            onChanged: (value) {
+              if (value != null) {
+                setDialogState(() => selectedStatus = value);
+              }
+            },
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: const Text('Cancel'),
+            ),
+            FilledButton.icon(
+              onPressed: () => Navigator.of(dialogContext).pop(selectedStatus),
+              icon: const Icon(Icons.save_outlined, size: 17),
+              label: const Text('Save status'),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    if (status == null || status == currentStatus) return false;
+
+    try {
+      await _apiService.updateMachineStatus(id: machine.id, status: status);
+      if (!mounted) return false;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('${machine.machineNo} set to ${_machineStatusLabel(status)}.')),
+      );
+      return true;
+    } catch (error) {
+      if (!mounted) return false;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(error.toString().replaceFirst('Exception: ', '')),
+          duration: const Duration(seconds: 5),
+        ),
+      );
+      return false;
+    }
+  }
   @override
   Widget build(BuildContext context) {
     final machines = _filteredMachines;
@@ -724,11 +824,12 @@ class _MachineRegister extends StatelessWidget {
 
 class _MachineDetails extends StatelessWidget {
   final Machine machine;
+  final Future<bool> Function(Machine machine) onChangeStatus;
 
   const _MachineDetails({
     required this.machine,
+    required this.onChangeStatus,
   });
-
   @override
   Widget build(BuildContext context) {
     return Dialog(
@@ -762,33 +863,28 @@ _Status(machine.status),
 const SizedBox(width: 8),
 OutlinedButton.icon(
   onPressed: () async {
-    Navigator.of(context).pop();
-
-    final result = await Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => AddMachinePage(
-          machine: machine,
-        ),
-      ),
-    );
-
-    if (result == true) {
-      // The parent Machines screen will refresh
-      // when the edit page returns.
+    final changed = await onChangeStatus(machine);
+    if (changed && context.mounted) {
+      Navigator.of(context).pop(_MachineDetailsAction.statusChanged);
     }
   },
-  icon: const Icon(
-    Icons.edit_outlined,
-    size: 16,
+  icon: const Icon(Icons.sync_alt, size: 16),
+  label: const Text('Status'),
+  style: OutlinedButton.styleFrom(
+    foregroundColor: _accent,
+    side: const BorderSide(color: _accent),
+    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
   ),
+),
+const SizedBox(width: 6),
+OutlinedButton.icon(
+  onPressed: () => Navigator.of(context).pop(_MachineDetailsAction.edit),
+  icon: const Icon(Icons.edit_outlined, size: 16),
   label: const Text('Edit'),
   style: OutlinedButton.styleFrom(
     foregroundColor: _accent,
     side: const BorderSide(color: _accent),
-    padding: const EdgeInsets.symmetric(
-      horizontal: 12,
-      vertical: 10,
-    ),
+    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
   ),
 ),
 const SizedBox(width: 4),

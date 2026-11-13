@@ -383,9 +383,11 @@ router.post('/:id/production',async(req,res)=>{
     if(!job.rows.length){await client.query('ROLLBACK');inTransaction=false;return res.status(404).json({success:false,error:'Job order not found'});}
     const machine=await client.query(`SELECT id FROM master.machines WHERE id=$1 AND company_id=$2 AND is_active=true`,[machineId,COMPANY_ID]);
     if(!machine.rows.length){await client.query('ROLLBACK');inTransaction=false;return res.status(400).json({success:false,error:'Machine not found or inactive'});}
+    const assigned=await client.query(`SELECT 1 FROM jobwork.job_order_machines WHERE job_order_id=$1 AND machine_id=$2 LIMIT 1`,[jobId,machineId]);
+    if(!assigned.rows.length){await client.query('ROLLBACK');inTransaction=false;return res.status(400).json({success:false,error:'Machine is not assigned to this job order'});}
     const prod=await client.query(`
       INSERT INTO production.fabric_production(company_id,financial_year_id,job_order_id,machine_id,production_date,status,notes)
-      SELECT $1,fy.id,$2,$3,COALESCE($4::date,CURRENT_DATE),'POSTED',$5
+      SELECT $1,fy.id,$2,$3,COALESCE($4::date,CURRENT_DATE),'DRAFT',$5
       FROM core.financial_years fy WHERE fy.company_id=$1 AND fy.is_current AND NOT fy.is_closed
       RETURNING id
     `,[COMPANY_ID,jobId,machineId,b.production_date??b.productionDate??null,cleanString(b.remarks)]);
@@ -395,6 +397,8 @@ router.post('/:id/production',async(req,res)=>{
       VALUES($1,$2,$3,0,$3,$4,$5,$6,$7)
       RETURNING id,roll_no,net_weight_kg
     `,[prod.rows[0].id,cleanString(b.roll_no??b.rollNo)||null,qty,toNumber(b.meters),b.width_inches??b.widthInches??null,b.gsm??null,cleanString(b.remarks)||null]);
+    const posted=await client.query("UPDATE production.fabric_production SET status='POSTED' WHERE id=$1 RETURNING id",[prod.rows[0].id]);
+    if(!posted.rows.length)throw new Error('Production entry could not be posted');
     await client.query('COMMIT');
     inTransaction=false;
     res.status(201).json({success:true,production:roll.rows[0]});
@@ -417,9 +421,11 @@ router.post('/production-batch',async(req,res)=>{
       if(!job.rows.length)throw new Error('Job order not found');
       const machine=await client.query(`SELECT id FROM master.machines WHERE id=$1 AND company_id=$2 AND is_active=true`,[machineId,COMPANY_ID]);
       if(!machine.rows.length)throw new Error('Machine not found or inactive');
+      const assigned=await client.query(`SELECT 1 FROM jobwork.job_order_machines WHERE job_order_id=$1 AND machine_id=$2 LIMIT 1`,[jobId,machineId]);
+      if(!assigned.rows.length)throw new Error('Machine is not assigned to this job order');
       const prod=await client.query(`
         INSERT INTO production.fabric_production(company_id,financial_year_id,job_order_id,machine_id,production_date,status,notes)
-        SELECT $1,fy.id,$2,$3,COALESCE($4::date,CURRENT_DATE),'POSTED',$5
+        SELECT $1,fy.id,$2,$3,COALESCE($4::date,CURRENT_DATE),'DRAFT',$5
         FROM core.financial_years fy WHERE fy.company_id=$1 AND fy.is_current AND NOT fy.is_closed
         RETURNING id
       `,[COMPANY_ID,jobId,machineId,b.production_date??b.productionDate??null,cleanString(b.remarks)]);
@@ -429,6 +435,8 @@ router.post('/production-batch',async(req,res)=>{
         VALUES($1,$2,$3,0,$3,$4,$5,$6,$7)
         RETURNING id,roll_no,net_weight_kg
       `,[prod.rows[0].id,cleanString(b.roll_no??b.rollNo)||null,qty,toNumber(b.meters),b.width_inches??b.widthInches??null,b.gsm??null,cleanString(b.remarks)||null]);
+      const posted=await client.query("UPDATE production.fabric_production SET status='POSTED' WHERE id=$1 RETURNING id",[prod.rows[0].id]);
+      if(!posted.rows.length)throw new Error('Production entry could not be posted');
       saved.push(roll.rows[0]);
     }
     await client.query('COMMIT');res.status(201).json({success:true,count:saved.length,production:saved});

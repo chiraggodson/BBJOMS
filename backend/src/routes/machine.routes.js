@@ -4,6 +4,14 @@ const { pool } = require('../db');
 
 const { COMPANY_ID } = require('../config');
 
+const MACHINE_STATUSES = new Set([
+  'IDLE',
+  'RUNNING',
+  'PAUSED',
+  'MAINTENANCE',
+  'OFFLINE',
+]);
+
 function mapMachine(row) {
   const rpm = Number(row.rpm) || 0;
   const counter = Number(row.counter) || 0;
@@ -70,6 +78,8 @@ router.post('/', async (req, res) => {
   try {
     const machineNo = String(req.body?.machine_no ?? '').trim();
     if (!machineNo) return res.status(400).json({ success: false, error: 'Machine number is required' });
+    const status = String(req.body?.status || 'IDLE').trim().toUpperCase();
+    if (!MACHINE_STATUSES.has(status)) return res.status(400).json({ success: false, error: 'Invalid machine status' });
 
     const rpm = Number(req.body?.rpm) || 0;
     const counter = Number(req.body?.counter) || 0;
@@ -108,7 +118,7 @@ router.post('/', async (req, res) => {
       RETURNING id, machine_no, status, rpm, counter, roll_size, is_active, created_at, updated_at
     `, [
       COMPANY_ID, machineNo, groupId, floorId,
-      String(req.body?.status || 'IDLE').toUpperCase(),
+      status,
       rpm, counter, rollSize, req.body?.is_active !== false
     ]);
 
@@ -124,10 +134,48 @@ router.post('/', async (req, res) => {
   }
 });
 
+router.patch('/:id/status', async (req, res) => {
+  try {
+    const status = String(req.body?.status ?? '').trim().toUpperCase();
+    if (!MACHINE_STATUSES.has(status)) {
+      return res.status(400).json({
+        success: false,
+        error: 'Status must be IDLE, RUNNING, PAUSED, MAINTENANCE or OFFLINE',
+      });
+    }
+
+    const result = await pool.query(`
+      UPDATE master.machines
+      SET status=$1, updated_at=NOW()
+      WHERE id=$2 AND company_id=$3 AND is_active=TRUE
+      RETURNING id
+    `, [status, req.params.id, COMPANY_ID]);
+
+    if (!result.rows.length) {
+      return res.status(404).json({ success: false, error: 'Machine not found' });
+    }
+
+    const full = await pool.query(`${selectSql} WHERE m.id=$1 AND m.company_id=$2`, [req.params.id, COMPANY_ID]);
+    return res.json({
+      success: true,
+      message: 'Machine status updated successfully',
+      machine: mapMachine(full.rows[0]),
+    });
+  } catch (error) {
+    console.error('Update machine status failed:', error);
+    return res.status(500).json({
+      success: false,
+      error: 'Failed to update machine status',
+      details: error.message,
+    });
+  }
+});
 router.put('/:id', async (req, res) => {
   try {
     const machineNo = String(req.body?.machine_no ?? '').trim();
     if (!machineNo) return res.status(400).json({ success: false, error: 'Machine number is required' });
+    const status = String(req.body?.status || 'IDLE').trim().toUpperCase();
+    if (!MACHINE_STATUSES.has(status)) return res.status(400).json({ success: false, error: 'Invalid machine status' });
 
     const rpm = Number(req.body?.rpm) || 0;
     const counter = Number(req.body?.counter) || 0;
@@ -140,7 +188,7 @@ router.put('/:id', async (req, res) => {
       WHERE id=$6 AND company_id=$7
       RETURNING id
     `, [
-      machineNo, String(req.body?.status || 'IDLE').toUpperCase(),
+      machineNo, status,
       rpm, counter, rollSize, req.params.id, COMPANY_ID
     ]);
 

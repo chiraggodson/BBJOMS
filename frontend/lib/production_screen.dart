@@ -1760,6 +1760,7 @@ Color _statusColor(String status) {
     case 'maintenance':
       return BBTheme.red;
     case 'stopped':
+    case 'offline':
     case 'paused':
       return BBTheme.redLight;
     default:

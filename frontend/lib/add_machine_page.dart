@@ -59,8 +59,9 @@ class _AddMachinePageState extends State<AddMachinePage> {
       final validStatuses = {
         'idle',
         'running',
+        'paused',
         'maintenance',
-        'stopped',
+        'offline',
       };
 
       final normalizedStatus = machine.status.trim().toLowerCase();
@@ -372,13 +373,17 @@ class _AddMachinePageState extends State<AddMachinePage> {
                           child: Text('Running'),
                         ),
                         DropdownMenuItem(
+                          value: 'paused',
+                          child: Text('Paused'),
+                        ),
+                        DropdownMenuItem(
                           value: 'maintenance',
                           child:
                               Text('Maintenance'),
                         ),
                         DropdownMenuItem(
-                          value: 'stopped',
-                          child: Text('Stopped'),
+                          value: 'offline',
+                          child: Text('Offline'),
                         ),
                       ],
                       onChanged: _saving

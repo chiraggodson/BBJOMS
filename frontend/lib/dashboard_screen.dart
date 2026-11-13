@@ -145,7 +145,7 @@ class _DashboardPageState extends State<DashboardPage> {
 
   int get _stoppedMachines => _machines.where((machine) {
         final status = machine.status.trim().toLowerCase();
-        return status == 'stopped' || status == 'stop';
+        return status == 'stopped' || status == 'stop' || status == 'offline';
       }).length;
 
   int get _totalMachines => _machines.length;
@@ -246,7 +246,7 @@ class _DashboardPageState extends State<DashboardPage> {
         _AttentionItem(
           type: 'MACHINE',
           text:
-              '$_stoppedMachines machine${_stoppedMachines == 1 ? '' : 's'} currently stopped.',
+              '$_stoppedMachines machine${_stoppedMachines == 1 ? '' : 's'} stopped or offline.',
           icon: Icons.stop_circle_outlined,
         ),
       );
