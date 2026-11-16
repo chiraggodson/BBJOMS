@@ -297,7 +297,7 @@ class _AddMachinePageState extends State<AddMachinePage> {
           constraints:
               const BoxConstraints(maxWidth: 760),
           child: SingleChildScrollView(
-            padding: const EdgeInsets.all(28),
+            padding: const EdgeInsets.all(24),
             child: Container(
               padding: const EdgeInsets.all(24),
               decoration: BoxDecoration(

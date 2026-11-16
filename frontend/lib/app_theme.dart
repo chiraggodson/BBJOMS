@@ -23,19 +23,20 @@ class BBTheme {
   static const Color amber = Color(0xFFD39B35);
 
   static ThemeData dark() {
-    final scheme = ColorScheme.fromSeed(
-      seedColor: red,
-      brightness: Brightness.dark,
-    ).copyWith(
-      primary: red,
-      onPrimary: Colors.white,
-      secondary: red,
-      onSecondary: Colors.white,
-      surface: panel,
-      onSurface: text,
-      error: red,
-      onError: Colors.white,
-    );
+    final scheme =
+        ColorScheme.fromSeed(
+          seedColor: red,
+          brightness: Brightness.dark,
+        ).copyWith(
+          primary: red,
+          onPrimary: Colors.white,
+          secondary: red,
+          onSecondary: Colors.white,
+          surface: panel,
+          onSurface: text,
+          error: red,
+          onError: Colors.white,
+        );
 
     return ThemeData(
       useMaterial3: true,
@@ -44,16 +45,17 @@ class BBTheme {
       scaffoldBackgroundColor: canvas,
       fontFamily: 'Arial',
       textTheme: const TextTheme(
-        headlineLarge: TextStyle(fontWeight: FontWeight.w900, fontSize: 38, shadows: [Shadow(color: Colors.black, offset: Offset(0, 1), blurRadius: 1)]),
-        headlineMedium: TextStyle(fontWeight: FontWeight.w900, fontSize: 31, shadows: [Shadow(color: Colors.black, offset: Offset(0, 1), blurRadius: 1)]),
-        headlineSmall: TextStyle(fontWeight: FontWeight.w900, fontSize: 27, shadows: [Shadow(color: Colors.black, offset: Offset(0, 1), blurRadius: 1)]),
-        titleLarge: TextStyle(fontWeight: FontWeight.w900, fontSize: 22, shadows: [Shadow(color: Colors.black, offset: Offset(0, 1), blurRadius: 1)]),
-        titleMedium: TextStyle(fontWeight: FontWeight.w800, fontSize: 18),
-        titleSmall: TextStyle(fontWeight: FontWeight.w800, fontSize: 17),
-        bodyLarge: TextStyle(fontWeight: FontWeight.w600, fontSize: 17),
-        bodyMedium: TextStyle(fontWeight: FontWeight.w500, fontSize: 15),
-        labelLarge: TextStyle(fontWeight: FontWeight.w900),
-        labelMedium: TextStyle(fontWeight: FontWeight.w800),
+        headlineLarge: TextStyle(fontWeight: FontWeight.w700, fontSize: 32),
+        headlineMedium: TextStyle(fontWeight: FontWeight.w700, fontSize: 28),
+        headlineSmall: TextStyle(fontWeight: FontWeight.w700, fontSize: 25),
+        titleLarge: TextStyle(fontWeight: FontWeight.w700, fontSize: 20),
+        titleMedium: TextStyle(fontWeight: FontWeight.w600, fontSize: 16),
+        titleSmall: TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
+        bodyLarge: TextStyle(fontWeight: FontWeight.w500, fontSize: 16),
+        bodyMedium: TextStyle(fontWeight: FontWeight.w400, fontSize: 14),
+        bodySmall: TextStyle(fontWeight: FontWeight.w400, fontSize: 12),
+        labelLarge: TextStyle(fontWeight: FontWeight.w600),
+        labelMedium: TextStyle(fontWeight: FontWeight.w600),
       ),
       appBarTheme: const AppBarTheme(
         backgroundColor: black2,
@@ -65,24 +67,35 @@ class BBTheme {
         color: panel,
         elevation: 0,
         margin: EdgeInsets.zero,
+        shape: RoundedRectangleBorder(
+          side: BorderSide(color: borderSoft),
+          borderRadius: BorderRadius.all(Radius.circular(10)),
+        ),
       ),
-      dividerTheme: const DividerThemeData(color: border, thickness: 1, space: 1),
+      dividerTheme: const DividerThemeData(
+        color: border,
+        thickness: 1,
+        space: 1,
+      ),
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
         fillColor: black3,
         hintStyle: const TextStyle(color: subtle),
         labelStyle: const TextStyle(color: muted),
-        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 14,
+          vertical: 13,
+        ),
         border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(5),
+          borderRadius: BorderRadius.circular(8),
           borderSide: const BorderSide(color: border),
         ),
         enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(5),
+          borderRadius: BorderRadius.circular(8),
           borderSide: const BorderSide(color: border),
         ),
         focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(5),
+          borderRadius: BorderRadius.circular(8),
           borderSide: const BorderSide(color: red, width: 1.5),
         ),
       ),
@@ -90,18 +103,28 @@ class BBTheme {
         style: FilledButton.styleFrom(
           backgroundColor: red,
           foregroundColor: Colors.white,
-          side: const BorderSide(color: Colors.black, width: 1.5),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
-          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 13),
-          textStyle: const TextStyle(fontWeight: FontWeight.w900),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+          minimumSize: const Size(0, 42),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 11),
+          textStyle: const TextStyle(fontWeight: FontWeight.w600),
         ),
       ),
       outlinedButtonTheme: OutlinedButtonThemeData(
         style: OutlinedButton.styleFrom(
           foregroundColor: text,
-          side: const BorderSide(color: Colors.black, width: 1.25),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
-          textStyle: const TextStyle(fontWeight: FontWeight.w800),
+          side: const BorderSide(color: border),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+          minimumSize: const Size(0, 42),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+          textStyle: const TextStyle(fontWeight: FontWeight.w600),
+        ),
+      ),
+      dialogTheme: DialogThemeData(
+        backgroundColor: panel,
+        surfaceTintColor: Colors.transparent,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+          side: const BorderSide(color: border),
         ),
       ),
       progressIndicatorTheme: const ProgressIndicatorThemeData(color: red),

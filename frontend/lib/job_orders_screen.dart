@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'app_theme.dart';
+import 'widgets/app_widgets.dart';
 
 import 'services/api_service.dart';
 
@@ -409,71 +410,19 @@ Future<void> _openNewJob() async {
     final jobs = _filteredJobs;
 
     return SingleChildScrollView(
-      padding: const EdgeInsets.all(28),
+      padding: const EdgeInsets.fromLTRB(24, 24, 24, 32),
       child: Column(
         crossAxisAlignment:
             CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              const Expanded(
-                child: Column(
-                  crossAxisAlignment:
-                      CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Job Orders',
-                      style: TextStyle(
-                        fontSize: 28,
-                        fontWeight:
-                            FontWeight.w700,
-                      ),
-                    ),
-                    SizedBox(height: 5),
-                    Text(
-                      'Create, track and manage knitting job orders',
-                      style: TextStyle(
-                        color: _muted,
-                        fontSize: 13,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-
-              IconButton(
-                onPressed:
-                    _loading ? null : _loadJobs,
-                tooltip: 'Refresh',
-                icon:
-                    const Icon(Icons.refresh),
-              ),
-
-              const SizedBox(width: 8),
-
-              FilledButton.icon(
-                onPressed: _openNewJob,
-                icon: const Icon(
-                  Icons.add_task,
-                  size: 18,
-                ),
-                label:
-                    const Text('New Job Order'),
-                style:
-                    FilledButton.styleFrom(
-                  backgroundColor: _accent,
-                  foregroundColor:
-                      Colors.white,
-                  padding:
-                      const EdgeInsets.symmetric(
-                    horizontal: 18,
-                    vertical: 14,
-                  ),
-                ),
-              ),
+          BBPageHeader(
+            title: 'Job Orders',
+            subtitle: 'Create, track and manage knitting job orders',
+            actions: [
+              IconButton(onPressed: _loading ? null : _loadJobs, tooltip: 'Refresh', icon: const Icon(Icons.refresh)),
+              FilledButton.icon(onPressed: _openNewJob, icon: const Icon(Icons.add_task), label: const Text('New job order')),
             ],
           ),
-
           const SizedBox(height: 24),
 
           LayoutBuilder(

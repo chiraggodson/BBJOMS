@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'app_theme.dart';
+import 'widgets/app_widgets.dart';
 import 'services/api_service.dart';
 
 const _bg = BBTheme.canvas;
@@ -166,60 +167,18 @@ class _FabricPageState extends State<FabricPage> {
     return Scaffold(
       backgroundColor: _bg,
       body: SingleChildScrollView(
-        padding: const EdgeInsets.all(28),
+        padding: const EdgeInsets.fromLTRB(24, 24, 24, 32),
         child: Column(
           crossAxisAlignment:
               CrossAxisAlignment.start,
           children: [
-            Row(
-              children: [
-                const Expanded(
-                  child: Column(
-                    crossAxisAlignment:
-                        CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Fabric',
-                        style: TextStyle(
-                          fontSize: 28,
-                          fontWeight:
-                              FontWeight.w700,
-                        ),
-                      ),
-                      SizedBox(height: 5),
-                      Text(
-                        'Fabric master, specifications and active production',
-                        style: TextStyle(
-                          color: _muted,
-                          fontSize: 13,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                FilledButton.icon(
-                  onPressed: _createFabric,
-                  icon: const Icon(
-                    Icons.add,
-                    size: 18,
-                  ),
-                  label:
-                      const Text('New Fabric'),
-                  style:
-                      FilledButton.styleFrom(
-                    backgroundColor: _accent,
-                    foregroundColor:
-                        Colors.white,
-                    padding:
-                        const EdgeInsets.symmetric(
-                      horizontal: 18,
-                      vertical: 14,
-                    ),
-                  ),
-                ),
+            BBPageHeader(
+              title: 'Fabric',
+              subtitle: 'Fabric master, specifications and active production',
+              actions: [
+                FilledButton.icon(onPressed: _createFabric, icon: const Icon(Icons.add), label: const Text('New fabric')),
               ],
             ),
-
             const SizedBox(height: 24),
 
             LayoutBuilder(

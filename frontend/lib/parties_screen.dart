@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'app_theme.dart';
+import 'widgets/app_widgets.dart';
 
 import 'services/api_service.dart';
 
@@ -259,7 +260,7 @@ class _PartiesPageState extends State<PartiesPage> {
 
     return SingleChildScrollView(
 
-      padding: const EdgeInsets.all(28),
+      padding: const EdgeInsets.fromLTRB(24, 24, 24, 32),
 
       child: Column(
 
@@ -267,98 +268,14 @@ class _PartiesPageState extends State<PartiesPage> {
 
         children: [
 
-          Row(
-
-            crossAxisAlignment: CrossAxisAlignment.start,
-
-            children: [
-
-              const Expanded(
-
-                child: Column(
-
-                  crossAxisAlignment: CrossAxisAlignment.start,
-
-                  children: [
-
-                    Text(
-
-                      'Parties',
-
-                      style: TextStyle(
-
-                        fontSize: 28,
-
-                        fontWeight: FontWeight.w700,
-
-                      ),
-
-                    ),
-
-                    SizedBox(height: 5),
-
-                    Text(
-
-                      'Customers, suppliers, job workers and other business parties',
-
-                      style: TextStyle(
-
-                        color: BBTheme.muted,
-
-                        fontSize: 13,
-
-                      ),
-
-                    ),
-
-                  ],
-
-                ),
-
-              ),
-
-              IconButton(
-
-                onPressed: _loading ? null : _refresh,
-
-                tooltip: 'Refresh',
-
-                icon: const Icon(Icons.refresh),
-
-              ),
-
-              const SizedBox(width: 8),
-
-              FilledButton.icon(
-
-                onPressed: _openNewParty,
-
-                icon: const Icon(Icons.add, size: 18),
-
-                label: const Text('New Party'),
-
-                style: FilledButton.styleFrom(
-
-                  backgroundColor: BBTheme.red,
-
-                  foregroundColor: Colors.white,
-
-                  padding: const EdgeInsets.symmetric(
-
-                    horizontal: 18,
-
-                    vertical: 14,
-
-                  ),
-
-                ),
-
-              ),
-
+          BBPageHeader(
+            title: 'Parties',
+            subtitle: 'Customers, suppliers, job workers and other business parties',
+            actions: [
+              IconButton(onPressed: _loading ? null : _refresh, tooltip: 'Refresh', icon: const Icon(Icons.refresh)),
+              FilledButton.icon(onPressed: _openNewParty, icon: const Icon(Icons.add), label: const Text('New party')),
             ],
-
           ),
-
           const SizedBox(height: 24),
 
           _PartySummary(

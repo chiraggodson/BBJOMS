@@ -2,6 +2,7 @@
 import 'package:flutter/material.dart';
 
 import 'app_theme.dart';
+import 'widgets/app_widgets.dart';
 import 'services/api_service.dart';
 import 'services/production_service.dart';
 
@@ -189,47 +190,16 @@ class _ProductionPageState extends State<ProductionPage> {
       backgroundColor: BBTheme.panel,
       child: SingleChildScrollView(
         physics: const AlwaysScrollableScrollPhysics(),
-        padding: const EdgeInsets.all(28),
+        padding: const EdgeInsets.fromLTRB(24, 24, 24, 32),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Production',
-                        style: TextStyle(
-                          fontSize: 30,
-                          fontWeight: FontWeight.w900,
-                          color: BBTheme.text,
-                        ),
-                      ),
-                      SizedBox(height: 5),
-                      Text(
-                        'Live machine status, jobs and production',
-                        style: TextStyle(
-                          color: BBTheme.muted,
-                          fontSize: 13,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                IconButton(
-                  tooltip: 'Refresh',
-                  onPressed: _loading ? null : _load,
-                  icon: const Icon(Icons.refresh),
-                ),
-                const SizedBox(width: 8),
-                FilledButton.icon(
-                  onPressed: _loading ? null : _openProductionEntry,
-                  icon: const Icon(Icons.add, size: 18),
-                  label: const Text('Production Entry'),
-                ),
+            BBPageHeader(
+              title: 'Production',
+              subtitle: 'Live machine status, jobs and production',
+              actions: [
+                IconButton(onPressed: _loading ? null : _load, tooltip: 'Refresh', icon: const Icon(Icons.refresh)),
+                FilledButton.icon(onPressed: _loading ? null : _openProductionEntry, icon: const Icon(Icons.add), label: const Text('Production entry')),
               ],
             ),
             const SizedBox(height: 24),

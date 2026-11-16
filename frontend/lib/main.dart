@@ -10,6 +10,7 @@ import 'machines_screen.dart';
 import 'fabric_screen.dart';
 import 'inventory_screen.dart';
 import 'reports_screen.dart';
+import 'dispatch_screen.dart';
 
 void main() {
   runApp(const BBJOMSApp());
@@ -48,6 +49,7 @@ class _BBJOMSShellState extends State<BBJOMSShell> {
     _NavigationItem(icon: Icons.settings_outlined, selectedIcon: Icons.settings, label: 'Machines'),
     _NavigationItem(icon: Icons.layers_outlined, selectedIcon: Icons.layers, label: 'Fabric'),
     _NavigationItem(icon: Icons.warehouse_outlined, selectedIcon: Icons.warehouse, label: 'Inventory'),
+    _NavigationItem(icon: Icons.local_shipping_outlined, selectedIcon: Icons.local_shipping, label: 'Dispatch'),
     _NavigationItem(icon: Icons.bar_chart_outlined, selectedIcon: Icons.bar_chart, label: 'Reports'),
   ];
 
@@ -542,6 +544,8 @@ class _BBJOMSShellState extends State<BBJOMSShell> {
       case 7:
         return const InventoryPage();
       case 8:
+        return const DispatchPage();
+      case 9:
         return const ReportsPage();
       default:
         return const DashboardPage();

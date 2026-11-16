@@ -7,4 +7,5 @@
 \ir "Backups/New folder/005.sql"
 \ir "migrations/006_yarn_return_and_setting_cloth.sql"
 \ir "Backups/New folder/008.sql"
+\ir "migrations/007_dispatch.sql"
 \echo 'Fresh BBJOMS schema is ready'

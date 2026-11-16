@@ -935,6 +935,21 @@ class ApiService {
     }
     return Map<String, dynamic>.from(data['summary'] as Map);
   }
+
+  Future<List<Map<String, dynamic>>> getReportRows(String report, {DateTime? from, DateTime? to}) async {
+    final query = <String, String>{};
+    if (from != null) query['from'] = _reportDate(from);
+    if (to != null) query['to'] = _reportDate(to);
+    final uri = Uri.parse('$baseUrl/reports/$report').replace(queryParameters: query.isEmpty ? null : query);
+    final response = await ApiHttp.get(uri);
+    final data = _tryDecode(response.body);
+    if (response.statusCode != 200 || data is! Map || data['success'] != true || data['rows'] is! List) {
+      throw ApiException(_extractError(data, 'Failed to load report'), response.statusCode);
+    }
+    return (data['rows'] as List).whereType<Map>().map((row) => Map<String, dynamic>.from(row)).toList();
+  }
+
+  String _reportDate(DateTime date) => '${date.year.toString().padLeft(4, '0')}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
   Future<List<Map<String, dynamic>>> getReturnableYarn(String jobId) async {
     final response = await ApiHttp.get(Uri.parse('$baseUrl/job-materials/$jobId/returnable-yarn'));
     final data = _tryDecode(response.body);

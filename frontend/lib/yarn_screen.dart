@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'app_theme.dart';
+import 'widgets/app_widgets.dart';
 import 'services/api_service.dart';
 import 'services/yarn_receipt_service.dart';
 
@@ -91,20 +92,6 @@ class _YarnPageState extends State<YarnPage> {
         _inventoryLoading = false;
         _inventoryError = e.toString();
       });
-    }
-  }
-
-  Future<void> _openYarnIssue() async {
-    final saved = await showDialog<bool>(
-      context: context,
-      builder: (_) => _YarnIssueDialog(
-        api: _api,
-        yarnApi: _yarnApi,
-      ),
-    );
-
-    if (saved == true && mounted) {
-      await _loadInventoryData();
     }
   }
 
@@ -268,71 +255,21 @@ for (final row in _stock) {
 
 return SingleChildScrollView(
 
-      padding: const EdgeInsets.all(28),
+      padding: const EdgeInsets.fromLTRB(24, 24, 24, 32),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Yarn',
-                      style: TextStyle(
-                        fontSize: 28,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                    SizedBox(height: 5),
-                    Text(
-                      'Generic yarn specifications, stock and movement ledger',
-                      style: TextStyle(
-                        color: Color(0xFF84919D),
-                        fontSize: 13,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
+          BBPageHeader(
+            title: 'Yarn',
+            subtitle: 'Yarn specifications, stock and movement ledger',
+            actions: [
               IconButton(
                 tooltip: 'Refresh',
-                onPressed: _loading || _inventoryLoading
-                    ? null
-                    : () {
-                        _loadYarns();
-                        _loadInventoryData();
-                      },
+                onPressed: _loading || _inventoryLoading ? null : () { _loadYarns(); _loadInventoryData(); },
                 icon: const Icon(Icons.refresh),
               ),
-              const SizedBox(width: 8),
-              OutlinedButton.icon(
-                onPressed: () => _openColorMaster(),
-                icon: const Icon(Icons.palette_outlined, size: 18),
-                label: const Text('Colors'),
-              ),
-              const SizedBox(width: 8),
-              OutlinedButton.icon(
-                onPressed: () => _openYarnIssue(),
-                icon: const Icon(Icons.north_east, size: 18),
-                label: const Text('Issue Yarn'),
-              ),
-              const SizedBox(width: 8),
-              FilledButton.icon(
-                onPressed: () => _openYarnForm(),
-                icon: const Icon(Icons.add, size: 18),
-                label: const Text('Add Yarn'),
-                style: FilledButton.styleFrom(
-                  backgroundColor: BBTheme.red,
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 18,
-                    vertical: 14,
-                  ),
-                ),
-              ),
+              OutlinedButton.icon(onPressed: _openColorMaster, icon: const Icon(Icons.palette_outlined), label: const Text('Colors')),
+              FilledButton.icon(onPressed: _openYarnForm, icon: const Icon(Icons.add), label: const Text('Add yarn')),
             ],
           ),
           const SizedBox(height: 24),
@@ -970,20 +907,21 @@ class _YarnIssueJobGroup {
   }
 }
 
-class _YarnIssueDialog extends StatefulWidget {
+class YarnIssueDialog extends StatefulWidget {
   final ApiService api;
   final YarnReceiptApi yarnApi;
 
-  const _YarnIssueDialog({
+  const YarnIssueDialog({
+    super.key,
     required this.api,
     required this.yarnApi,
   });
 
   @override
-  State<_YarnIssueDialog> createState() => _YarnIssueDialogState();
+  State<YarnIssueDialog> createState() => _YarnIssueDialogState();
 }
 
-class _YarnIssueDialogState extends State<_YarnIssueDialog> {
+class _YarnIssueDialogState extends State<YarnIssueDialog> {
   final TextEditingController _date = TextEditingController(
     text: DateTime.now().toIso8601String().substring(0, 10),
   );

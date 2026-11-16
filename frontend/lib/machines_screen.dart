@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'app_theme.dart';
+import 'widgets/app_widgets.dart';
 import 'services/api_service.dart';
 import 'add_machine_page.dart';
 
@@ -416,61 +417,23 @@ class _MachinesPageState extends State<MachinesPage> {
     final machines = _filteredMachines;
 
     return SingleChildScrollView(
-      padding: const EdgeInsets.all(28),
+      padding: const EdgeInsets.fromLTRB(24, 24, 24, 32),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              const Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Machines',
-                      style: TextStyle(
-                        fontSize: 28,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                    SizedBox(height: 5),
-                    Text(
-                      'Machine master, status and production information',
-                      style: TextStyle(
-                        color: _muted,
-                        fontSize: 13,
-                      ),
-                    ),
-                  ],
-                ),
+          BBPageHeader(
+            title: 'Machines',
+            subtitle: 'Machine master, status and production information',
+            actions: [
+              FilledButton.icon(
+                onPressed: _loading ? null : () async {
+                  final result = await Navigator.of(context).push(MaterialPageRoute(builder: (_) => const AddMachinePage()));
+                  if (result != null && mounted) await _loadMachines();
+                },
+                icon: const Icon(Icons.add),
+                label: const Text('Add machine'),
               ),
-              OutlinedButton.icon(
-                onPressed: _loading
-                    ? null
-                    : () async {
-                        final result = await Navigator.of(context).push(
-                          MaterialPageRoute(
-                            builder: (_) => const AddMachinePage(),
-                          ),
-                        );
-
-                        if (result != null && mounted) {
-                          await _loadMachines();
-                        }
-                      },
-                icon: const Icon(Icons.add, size: 18),
-                label: const Text('Add Machine'),
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: _accent,
-                  side: const BorderSide(color: _accent),
-                ),
-              ),
-              const SizedBox(width: 10),
-              OutlinedButton.icon(
-                onPressed: _loading ? null : _loadMachines,
-                icon: const Icon(Icons.refresh, size: 18),
-                label: const Text('Refresh'),
-              ),
+              IconButton(onPressed: _loading ? null : _loadMachines, tooltip: 'Refresh', icon: const Icon(Icons.refresh)),
             ],
           ),
           const SizedBox(height: 24),

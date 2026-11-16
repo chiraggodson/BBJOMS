@@ -332,7 +332,7 @@ class _DashboardPageState extends State<DashboardPage> {
       backgroundColor: BBTheme.panel,
       child: SingleChildScrollView(
         physics: const AlwaysScrollableScrollPhysics(),
-        padding: const EdgeInsets.fromLTRB(26, 24, 26, 34),
+        padding: const EdgeInsets.fromLTRB(24, 24, 24, 32),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -393,119 +393,123 @@ class _Hero extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.fromLTRB(20, 18, 20, 18),
-      decoration: BoxDecoration(
-        color: BBTheme.panel,
-        border: Border.all(color: BBTheme.border),
-        borderRadius: BorderRadius.circular(7),
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 5,
-            height: 64,
-            color: BBTheme.red,
-          ),
-          const SizedBox(width: 16),
-          const Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'B&B KNITFAB',
-                  style: TextStyle(
-                    color: BBTheme.redLight,
-                    fontSize: 15,
-                    fontWeight: FontWeight.w900,
-                    letterSpacing: 2.2,
-                  ),
-                ),
-                SizedBox(height: 5),
-                Text(
-                  'FACTORY COMMAND CENTER',
-                  style: TextStyle(
-                    color: BBTheme.text,
-                    fontSize: 40,
-                    fontWeight: FontWeight.w900,
-                    letterSpacing: .2,
-                  ),
-                ),
-                SizedBox(height: 4),
-                Text(
-                  'Live operational view of jobs, production, machines and material.',
-                  style: TextStyle(
-                    color: BBTheme.muted,
-                    fontSize: 18,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(width: 16),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.end,
+  Widget build(BuildContext context) => LayoutBuilder(
+        builder: (context, constraints) {
+          final narrow = constraints.maxWidth < 760;
+          final heading = Row(
             children: [
               Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+                width: 4,
+                height: 66,
                 decoration: BoxDecoration(
-                  color: BBTheme.black3,
-                  border: Border.all(color: BBTheme.border),
-                  borderRadius: BorderRadius.circular(5),
+                  color: BBTheme.red,
+                  borderRadius: BorderRadius.circular(4),
                 ),
-                child: Row(
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Icon(
-                      Icons.circle,
-                      size: 8,
-                      color: loading ? BBTheme.amber : BBTheme.green,
-                    ),
-                    const SizedBox(width: 8),
-                    Text(
-                      loading ? 'UPDATING' : 'SYSTEM ONLINE',
+                    const Text(
+                      'B&B KNITFAB',
                       style: TextStyle(
-                        color: loading ? BBTheme.amber : BBTheme.green,
-                        fontSize: 14,
-                        fontWeight: FontWeight.w900,
-                        letterSpacing: .7,
+                        color: BBTheme.redLight,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: 1.6,
                       ),
+                    ),
+                    const SizedBox(height: 5),
+                    Text(
+                      'Factory command center',
+                      style: TextStyle(
+                        color: BBTheme.text,
+                        fontSize: narrow ? 23 : 29,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    const Text(
+                      'Live operational view of jobs, production, machines and material.',
+                      style: TextStyle(color: BBTheme.muted, fontSize: 13),
                     ),
                   ],
                 ),
               ),
-              const SizedBox(height: 8),
-              Row(
-                children: [
-                  Text(
-                    lastUpdated,
-                    style: const TextStyle(
-                      color: BBTheme.muted,
-                      fontSize: 11,
-                      fontWeight: FontWeight.w800,
-                    ),
+            ],
+          );
+          final status = Container(
+            padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 8),
+            decoration: BoxDecoration(
+              color: BBTheme.black3,
+              border: Border.all(color: BBTheme.border),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.circle, size: 8, color: loading ? BBTheme.amber : BBTheme.green),
+                const SizedBox(width: 8),
+                Text(
+                  loading ? 'UPDATING' : 'SYSTEM ONLINE',
+                  style: TextStyle(
+                    color: loading ? BBTheme.amber : BBTheme.green,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: .5,
                   ),
-                  const SizedBox(width: 4),
-                  IconButton(
-                    tooltip: 'Refresh dashboard',
-                    onPressed: onRefresh,
-                    icon: const Icon(Icons.refresh, size: 18),
-                    color: BBTheme.muted,
-                    padding: EdgeInsets.zero,
-                    constraints: const BoxConstraints(
-                      minWidth: 30,
-                      minHeight: 30,
-                    ),
-                  ),
-                ],
+                ),
+              ],
+            ),
+          );
+          final updated = Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(lastUpdated, style: const TextStyle(color: BBTheme.muted, fontSize: 11)),
+              IconButton(
+                tooltip: 'Refresh dashboard',
+                onPressed: onRefresh,
+                icon: const Icon(Icons.refresh, size: 18),
+                color: BBTheme.muted,
+                constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
               ),
             ],
-          ),
-        ],
-      ),
-    );
-  }
+          );
+
+          return Container(
+            width: double.infinity,
+            padding: EdgeInsets.all(narrow ? 16 : 20),
+            decoration: BoxDecoration(
+              color: BBTheme.panel,
+              border: Border.all(color: BBTheme.border),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: narrow
+                ? Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      heading,
+                      const SizedBox(height: 12),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [status, Flexible(child: updated)],
+                      ),
+                    ],
+                  )
+                : Row(
+                    children: [
+                      Expanded(child: heading),
+                      const SizedBox(width: 20),
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: [status, updated],
+                      ),
+                    ],
+                  ),
+          );
+        },
+      );
 }
 
 class _ErrorBanner extends StatelessWidget {

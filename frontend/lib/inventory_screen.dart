@@ -1,7 +1,10 @@
 
 import 'package:flutter/material.dart';
 import 'app_theme.dart';
+import 'widgets/app_widgets.dart';
+import 'services/api_service.dart';
 import 'services/yarn_receipt_service.dart';
+import 'yarn_screen.dart';
 
 const _panel = BBTheme.panel;
 const _panel2 = BBTheme.black3;
@@ -18,6 +21,7 @@ class InventoryPage extends StatefulWidget {
 
 class _InventoryPageState extends State<InventoryPage> {
   final YarnReceiptApi _api = YarnReceiptApi();
+  final ApiService _businessApi = ApiService();
 
   List<Map<String, dynamic>> _stock = [];
   List<Map<String, dynamic>> _movements = [];
@@ -56,6 +60,14 @@ class _InventoryPageState extends State<InventoryPage> {
         _error = e.toString().replaceFirst('Exception: ', '');
       });
     }
+  }
+
+  Future<void> _issueYarn() async {
+    final saved = await showDialog<bool>(
+      context: context,
+      builder: (_) => YarnIssueDialog(api: _businessApi, yarnApi: _api),
+    );
+    if (saved == true && mounted) await _load();
   }
 
   double _number(dynamic value) {
@@ -235,56 +247,18 @@ else {
       onRefresh: _load,
       child: SingleChildScrollView(
         physics: const AlwaysScrollableScrollPhysics(),
-        padding: const EdgeInsets.fromLTRB(26, 24, 26, 34),
+        padding: const EdgeInsets.fromLTRB(24, 24, 24, 32),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(
-              children: [
-                const Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Inventory',
-                        style: TextStyle(
-                          fontSize: 32,
-                          fontWeight: FontWeight.w900,
-                        ),
-                      ),
-                      SizedBox(height: 5),
-                      Text(
-                        'Live yarn stock and stock movement',
-                        style: TextStyle(color: _muted, fontSize: 14),
-                      ),
-                    ],
-                  ),
-                ),
-                IconButton(
-                  tooltip: 'Refresh',
-                  onPressed: _loading ? null : _load,
-                  icon: const Icon(Icons.refresh),
-                ),
-                const SizedBox(width: 8),
-                OutlinedButton.icon(
-                  onPressed: _addLocation,
-                  icon: const Icon(Icons.add_location_alt_outlined, size: 18),
-                  label: const Text('Add Location'),
-                ),
-                const SizedBox(width: 8),
-                FilledButton.icon(
-                  onPressed: _loading ? null : _receiveYarn,
-                  icon: const Icon(Icons.south_west, size: 18),
-                  label: const Text('Receive Yarn'),
-                  style: FilledButton.styleFrom(
-                    backgroundColor: _accent,
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 18,
-                      vertical: 13,
-                    ),
-                  ),
-                ),
+            BBPageHeader(
+              title: 'Inventory',
+              subtitle: 'Live yarn stock, receipts, issues and stock movement',
+              actions: [
+                IconButton(onPressed: _loading ? null : _load, tooltip: 'Refresh', icon: const Icon(Icons.refresh)),
+                OutlinedButton.icon(onPressed: _addLocation, icon: const Icon(Icons.add_location_alt_outlined), label: const Text('Add location')),
+                OutlinedButton.icon(onPressed: _loading ? null : _issueYarn, icon: const Icon(Icons.north_east), label: const Text('Issue yarn')),
+                FilledButton.icon(onPressed: _loading ? null : _receiveYarn, icon: const Icon(Icons.south_west), label: const Text('Receive yarn')),
               ],
             ),
             const SizedBox(height: 24),
